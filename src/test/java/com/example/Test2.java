@@ -7,5 +7,9 @@ public class Test2 {
     @Test
     public void print() {
 
+<<<<<<< HEAD
         System.out.println("All testcases passed8");
+=======
+        System.out.println("All testcases passed5");
+>>>>>>> test
     }}
