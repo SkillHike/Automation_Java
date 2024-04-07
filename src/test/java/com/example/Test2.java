@@ -7,5 +7,5 @@ public class Test2 {
     @Test
     public void print() {
 
-        System.out.println("All testcases passed");
+        System.out.println("All testcases passed1");
     }}
