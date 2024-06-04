@@ -69,6 +69,15 @@ public class ReportUtils {
         Sheet sheet = workbook.createSheet("Comparison Results");
         int rowCount = 0;
 
+        // Create reusable cell styles
+        CellStyle greenStyle = workbook.createCellStyle();
+        greenStyle.setFillForegroundColor(IndexedColors.GREEN.getIndex());
+        greenStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle redStyle = workbook.createCellStyle();
+        redStyle.setFillForegroundColor(IndexedColors.RED.getIndex());
+        redStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
         for (String[] rowData : reportData) {
             Row row = sheet.createRow(rowCount++);
             for (int i = 0; i < rowData.length; i++) {
@@ -76,14 +85,8 @@ public class ReportUtils {
                 cell.setCellValue(rowData[i]);
                 if (i > 0 && "Difference".equals(rowData[0])) {
                     if ("matched".equals(rowData[i])) {
-                        CellStyle greenStyle = workbook.createCellStyle();
-                        greenStyle.setFillForegroundColor(IndexedColors.GREEN.getIndex());
-                        greenStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                         cell.setCellStyle(greenStyle);
                     } else {
-                        CellStyle redStyle = workbook.createCellStyle();
-                        redStyle.setFillForegroundColor(IndexedColors.RED.getIndex());
-                        redStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                         cell.setCellStyle(redStyle);
                     }
                 }
@@ -99,5 +102,5 @@ public class ReportUtils {
 
         System.out.println("Excel report generated successfully at: " + filePath);
         System.out.println("Execution ended for Excel report generation.");
-    }
-}
+    }}
+
