@@ -10,7 +10,7 @@ public class FileComparisonTest {
     public void testCompareFilesInFolders() throws IOException, CsvValidationException {
         String folder1 = "C:\\Users\\manju\\IdeaProjects\\Skill_Hike\\src\\main\\resources\\data1";
         String folder2 = "C:\\Users\\manju\\IdeaProjects\\Skill_Hike\\src\\main\\resources\\data2";
-        String baseOutputPath = "C:\\Users\\manju\\IdeaProjects\\Skill_Hike\\target";
+        String baseOutputPath = "C:\\Users\\manju\\IdeaProjects\\Automation_Java_final\\target";
 
         DynamicReportGenerator.generateReports(folder1, folder2, baseOutputPath);
     }
