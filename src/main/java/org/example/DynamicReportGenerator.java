@@ -227,3 +227,4 @@ class FileComparisonSummary {
         return unmatchedColumns;
     }
 }
+
