@@ -25,50 +25,43 @@ import java.util.List;
 
 public class DynamicReportGenerator {
 
-    public static void generateReports(String folder1, String folder2, String baseOutputPath) {
+    public static void generateReports(String folder1, String folder2, String baseOutputPath, String excelFileName) {
         List<FileComparisonSummary> summaryList = new ArrayList<>();
 
         try {
-            Files.list(Paths.get(folder1)).forEach(filePath1 -> {
-                String fileName = filePath1.getFileName().toString();
-                try {
-                    List<List<String>> file1Data = readFile(filePath1.toString());
-                    List<List<String>> file2Data = readFile(Paths.get(folder2, fileName).toString());
+            List<List<String>> file1Data = readFile(folder1 + "\\" + excelFileName);
+            List<List<String>> file2Data = readFile(folder2 + "\\" + excelFileName);
 
-                    System.out.println("Comparison started for " + fileName);
+            System.out.println("Comparison started for " + excelFileName);
 
-                    List<String[]> comparisonResult = FileComparisonUtils.compareFiles(file1Data, file2Data);
+            List<String[]> comparisonResult = FileComparisonUtils.compareFiles(file1Data, file2Data);
 
-                    System.out.println("Comparison completed for " + fileName);
+            System.out.println("Comparison completed for " + excelFileName);
 
-                    String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-                    String outputDir = Paths.get(baseOutputPath, fileName + "_" + timestamp).toString();
-                    Files.createDirectories(Paths.get(outputDir));
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String outputDir = Paths.get(baseOutputPath, excelFileName + "_" + timestamp).toString();
+            Files.createDirectories(Paths.get(outputDir));
 
-                    String htmlReportPath = Paths.get(outputDir, "report.html").toString();
-                    String excelReportPath = Paths.get(outputDir, "report.xlsx").toString();
+            String htmlReportPath = Paths.get(outputDir, "report.html").toString();
+            String excelReportPath = Paths.get(outputDir, "report.xlsx").toString();
 
-                    ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult);
-                    ReportUtils.generateExcelReport(excelReportPath, comparisonResult);
+            ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult);
+            ReportUtils.generateExcelReport(excelReportPath, comparisonResult);
 
-                    // Generate individual Extent Report for each file comparison
-                    String extentReportPath = Paths.get(outputDir, "ExtentReport.html").toString();
-                    FileComparisonSummary summary = generateExtentReport(fileName, comparisonResult, extentReportPath, outputDir);
-                    summaryList.add(summary);
-
-                } catch (IOException | CsvValidationException e) {
-                    e.printStackTrace();
-                }
-            });
+            // Generate individual Extent Report for each file comparison
+            String extentReportPath = Paths.get(outputDir, "ExtentReport.html").toString();
+            FileComparisonSummary summary = generateExtentReport(excelFileName, comparisonResult, extentReportPath, outputDir);
+            summaryList.add(summary);
 
             // Generate final consolidated Extent Report
             String consolidatedReportPath = Paths.get(baseOutputPath, "Consolidated_ExtentReport.html").toString();
             generateConsolidatedReport(summaryList, consolidatedReportPath);
 
-        } catch (IOException e) {
+        } catch (IOException | CsvValidationException e) {
             e.printStackTrace();
         }
     }
+
 
     private static FileComparisonSummary generateExtentReport(String fileName, List<String[]> comparisonResult, String reportPath, String outputDir) throws IOException {
         ExtentSparkReporter sparkReporter = new ExtentSparkReporter(reportPath);
@@ -227,4 +220,3 @@ class FileComparisonSummary {
         return unmatchedColumns;
     }
 }
-
