@@ -4,6 +4,7 @@ import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.openxml4j.exceptions.NotOfficeXmlFileException;
 
 import java.io.FileReader;
 import java.io.IOException;
@@ -11,7 +12,9 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class FileComparisonUtils {
 
@@ -32,17 +35,43 @@ public class FileComparisonUtils {
 
     public static List<List<String>> readExcel(String filePath) throws IOException {
         List<List<String>> records = new ArrayList<>();
-        try (InputStream is = Files.newInputStream(Paths.get(filePath));
-             Workbook workbook = new XSSFWorkbook(is)) {
+        String extension = getFileExtension(filePath);
+        if (!"xlsx".equalsIgnoreCase(extension)) {
+            throw new IllegalArgumentException("Invalid file extension: " + extension);
+        }
+
+        System.out.println("Reading Excel file: " + filePath);
+
+        try (InputStream inputStream = Files.newInputStream(Paths.get(filePath));
+             Workbook workbook = new XSSFWorkbook(inputStream)) {
             Sheet sheet = workbook.getSheetAt(0);
             for (Row row : sheet) {
                 List<String> rowData = new ArrayList<>();
                 for (Cell cell : row) {
-                    rowData.add(cell.toString());
+                    switch (cell.getCellType()) {
+                        case STRING:
+                            rowData.add(cell.getStringCellValue());
+                            break;
+                        case NUMERIC:
+                            rowData.add(String.valueOf(cell.getNumericCellValue()));
+                            break;
+                        case BOOLEAN:
+                            rowData.add(String.valueOf(cell.getBooleanCellValue()));
+                            break;
+                        case FORMULA:
+                            rowData.add(cell.getCellFormula());
+                            break;
+                        default:
+                            rowData.add("");
+                    }
                 }
                 records.add(rowData);
             }
+        } catch (NotOfficeXmlFileException e) {
+            System.err.println("The file is not a valid Excel file: " + filePath);
+            throw e;
         }
+
         return records;
     }
 
@@ -59,90 +88,102 @@ public class FileComparisonUtils {
         return records;
     }
 
-    public static List<String[]> compareFiles(List<List<String>> file1Data, List<List<String>> file2Data) {
-        List<String[]> results = new ArrayList<>();
-
-        int numRows = Math.max(file1Data.size(), file2Data.size());
-        List<String> headers = file1Data.get(0);
-        int numCols = headers.size();
-
-        for (int i = 1; i < numRows; i++) {
-            List<String> row1 = i < file1Data.size() ? file1Data.get(i) : new ArrayList<>();
-            List<String> row2 = i < file2Data.size() ? file2Data.get(i) : new ArrayList<>();
-
-            String tradeId = i < file1Data.size() ? row1.get(0) : row2.get(0);
-            String[] tradeIdRow = new String[numCols];
-            tradeIdRow[0] = tradeId;
-            for (int j = 1; j < numCols; j++) {
-                tradeIdRow[j] = headers.get(j);
+    private static String getFileExtension(String filePath) {
+        if (filePath != null && !filePath.isEmpty()) {
+            int lastIndex = filePath.lastIndexOf(".");
+            if (lastIndex != -1 && lastIndex != 0 && lastIndex < filePath.length() - 1) {
+                return filePath.substring(lastIndex + 1);
             }
-            results.add(tradeIdRow);
-
-            results.add(createRowData("Data in Env1", row1, row2, numCols));
-            results.add(createRowData("Data in Env2", row2, row1, numCols));
-            results.add(createDifferenceRow(row1, row2, numCols));
         }
-
-        return results;
+        return "";
     }
 
-    private static String[] createRowData(String label, List<String> rowData, List<String> comparisonData, int numCols) {
-        String[] row = new String[numCols];
-        row[0] = label;
-        for (int j = 1; j < numCols; j++) {
-            String cellValue = rowData.size() > j ? rowData.get(j) : "";
-            String compareValue = comparisonData.size() > j ? comparisonData.get(j) : "";
-            if (cellValue.equals(compareValue)) {
-                row[j] = cellValue;
+    public static List<String[]> compareFiles(List<List<String>> file1Data, List<List<String>> file2Data, List<String> primaryKeyColumns1, List<String> primaryKeyColumns2) {
+        Map<String, Integer> headerMap1 = buildHeaderMap(file1Data.get(0));
+        Map<String, Integer> headerMap2 = buildHeaderMap(file2Data.get(0));
+
+        // Check if the first value is "Columnnames" and remove it
+        if (!primaryKeyColumns1.isEmpty() && primaryKeyColumns1.get(0).equals("ColumnName")) {
+            primaryKeyColumns1.remove(0);
+        }
+        if (!primaryKeyColumns2.isEmpty() && primaryKeyColumns2.get(0).equals("ColumnName")) {
+            primaryKeyColumns2.remove(0);
+        }
+
+        // Ensure the primary key columns exist in both files
+        for (String primaryKey : primaryKeyColumns1) {
+            if (!headerMap1.containsKey(primaryKey)) {
+                throw new IllegalArgumentException("Primary key column " + primaryKey + " does not exist in file 1.");
+            }
+        }
+        for (String primaryKey : primaryKeyColumns2) {
+            if (!headerMap2.containsKey(primaryKey)) {
+                throw new IllegalArgumentException("Primary key column " + primaryKey + " does not exist in file 2.");
+            }
+        }
+
+        Map<String, List<String>> file1Map = buildDataMap(file1Data);
+        Map<String, List<String>> file2Map = buildDataMap(file2Data);
+
+        return performComparison(file1Map, file2Map, primaryKeyColumns1, primaryKeyColumns2, headerMap1, headerMap2);
+    }
+
+
+    private static List<String[]> performComparison(Map<String, List<String>> file1Map, Map<String, List<String>> file2Map, List<String> primaryKeyColumns1, List<String> primaryKeyColumns2, Map<String, Integer> headerMap1, Map<String, Integer> headerMap2) {
+        List<String[]> differences = new ArrayList<>();
+
+        // Check for rows in file1 but not in file2
+        for (Map.Entry<String, List<String>> entry : file1Map.entrySet()) {
+            String key = entry.getKey();
+            if (!file2Map.containsKey(key)) {
+                differences.add(new String[]{"Missing in File2", key, entry.getValue().toString()});
             } else {
-                row[j] = cellValue;
-            }
-        }
-        return row;
-    }
+                List<String> row1 = entry.getValue();
+                List<String> row2 = file2Map.get(key);
 
-    private static String[] createDifferenceRow(List<String> row1, List<String> row2, int numCols) {
-        String[] row = new String[numCols];
-        row[0] = "Difference";
-        for (int j = 1; j < numCols; j++) {
-            if (j < row1.size() && j < row2.size()) {
-                double value1 = parseDouble(row1.get(j));
-                double value2 = parseDouble(row2.get(j));
-                if (!Double.isNaN(value1) && !Double.isNaN(value2)) {
-                    double difference = value1 - value2;
-                    if (Math.abs(difference) > 0.5) {
-                        row[j] = String.valueOf(difference);
-                    } else {
-                        row[j] = "matched";
+                // Compare using primary key columns for each file
+                for (String primaryKey : primaryKeyColumns1) {
+                    Integer index1 = headerMap1.get(primaryKey);
+                    Integer index2 = headerMap2.get(primaryKey);
+
+                    if (index1 != null && index2 != null && !row1.get(index1).equals(row2.get(index2))) {
+                        differences.add(new String[]{"Difference", key, primaryKey, row1.get(index1), row2.get(index2)});
                     }
-                } else if (row1.get(j).equals(row2.get(j))) {
-                    row[j] = "matched";
-                } else {
-                    row[j] = row1.get(j) + " | " + row2.get(j);
                 }
-            } else {
-                row[j] = "matched";
             }
         }
-        return row;
+
+        // Check for rows in file2 but not in file1
+        for (Map.Entry<String, List<String>> entry : file2Map.entrySet()) {
+            String key = entry.getKey();
+            if (!file1Map.containsKey(key)) {
+                differences.add(new String[]{"Missing in File1", key, entry.getValue().toString()});
+            }
+        }
+
+        return differences;
     }
 
 
-
-    private static double parseDouble(String str) {
-        try {
-            return Double.parseDouble(str);
-        } catch (NumberFormatException e) {
-            return Double.NaN;
+    private static Map<String, Integer> buildHeaderMap(List<String> headerRow) {
+        Map<String, Integer> headerMap = new HashMap<>();
+        for (int i = 0; i < headerRow.size(); i++) {
+            headerMap.put(headerRow.get(i), i);
         }
+        return headerMap;
     }
 
-    private static boolean isNumeric(String str) {
-        try {
-            Double.parseDouble(str);
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
+    private static Map<String, List<String>> buildDataMap(List<List<String>> data) {
+        Map<String, List<String>> dataMap = new HashMap<>();
+
+        for (List<String> row : data) {
+            if (row.size() >= 3 && "yes".equalsIgnoreCase(row.get(2))) { // Check if column 3 has "yes"
+                String key = row.get(1); // Pick the value from column 2 as the primary key
+                System.out.println("key=" + key + "  row=" + row);
+                dataMap.put(key, row);
+            }
         }
+
+        return dataMap;
     }
 }

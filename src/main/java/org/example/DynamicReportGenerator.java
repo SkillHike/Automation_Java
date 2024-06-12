@@ -1,5 +1,6 @@
 package org.example;
 
+
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.ExtentTest;
 import com.aventstack.extentreports.reporter.ExtentSparkReporter;
@@ -25,41 +26,63 @@ import java.util.List;
 
 public class DynamicReportGenerator {
 
-    public static void generateReports(String folder1, String folder2, String baseOutputPath) {
+    public static void generateReports(String folder1, String folder2, String baseOutputPath, String configFilePath) throws IOException {
         List<FileComparisonSummary> summaryList = new ArrayList<>();
 
         try {
             Files.list(Paths.get(folder1)).forEach(filePath1 -> {
-                String fileName = filePath1.getFileName().toString();
                 try {
+                    String fileName = filePath1.getFileName().toString();
+                    System.out.println(fileName + "---------file path name--------");
+
+                    // Adjust the path to include the file name from filePath1
+                    String fullFilePath2 = Paths.get(folder2, fileName).toString();
+                    System.out.println("full path===" + fullFilePath2);
+
+                    // Now the filename is correctly updated for each iteration
                     List<List<String>> file1Data = readFile(filePath1.toString());
-                    List<List<String>> file2Data = readFile(Paths.get(folder2, fileName).toString());
+                    List<List<String>> file2Data = readFile(fullFilePath2);
 
-                    System.out.println("Comparison started for " + fileName);
+                    // Read primary key columns configuration for file 1 and file 2
+                    // Read primary key columns configuration for file 1 and file 2
+                    List<String> primaryKeyColumns1 = ConfigurationFileReader.readPrimaryKeyColumns(configFilePath, fileName);
+                    List<String> primaryKeyColumns2 = ConfigurationFileReader.readPrimaryKeyColumns(configFilePath, fileName);
 
-                    List<String[]> comparisonResult = FileComparisonUtils.compareFiles(file1Data, file2Data);
 
-                    System.out.println("Comparison completed for " + fileName);
+                    // Verify primary key columns existence
+                    if (!arePrimaryKeyColumnsPresent(file1Data, primaryKeyColumns1) || !arePrimaryKeyColumnsPresent(file2Data, primaryKeyColumns2)) {
+                        // Log a warning and skip comparison for this file
+                        System.out.println("Warning: Primary key columns missing in one or both files. Skipping comparison for file: " + fileName);
+                        return; // Skip to the next file
+                    }
 
-                    String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-                    String outputDir = Paths.get(baseOutputPath, fileName + "_" + timestamp).toString();
-                    Files.createDirectories(Paths.get(outputDir));
+                    // Proceed with the comparison using the specific primary key columns for each sheet
+                    System.out.println(primaryKeyColumns1 + "====PK for file 1");
+                    System.out.println(primaryKeyColumns2 + "====PK for file 2");
+                    List<String[]> comparisonResult = FileComparisonUtils.compareFiles(file1Data, file2Data, primaryKeyColumns1, primaryKeyColumns2);
+                        // Generate HTML and Excel reports
+                        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+                        String reportFolder = Paths.get(baseOutputPath, fileName + "_" + timestamp).toString();
+                        String htmlReportPath = Paths.get(reportFolder, "ComparisonReport.html").toString();
+                        String excelReportPath = Paths.get(reportFolder, "ComparisonReport.xlsx").toString();
 
-                    String htmlReportPath = Paths.get(outputDir, "report.html").toString();
-                    String excelReportPath = Paths.get(outputDir, "report.xlsx").toString();
+                        ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult);
+                        ReportUtils.generateExcelReport(excelReportPath, comparisonResult);
 
-                    ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult);
-                    ReportUtils.generateExcelReport(excelReportPath, comparisonResult);
-
-                    // Generate individual Extent Report for each file comparison
-                    String extentReportPath = Paths.get(outputDir, "ExtentReport.html").toString();
-                    FileComparisonSummary summary = generateExtentReport(fileName, comparisonResult, extentReportPath, outputDir);
-                    summaryList.add(summary);
-
-                } catch (IOException | CsvValidationException e) {
-                    e.printStackTrace();
+                        // Generate individual Extent Report for each file comparison
+                        String extentReportPath = Paths.get(reportFolder, "ExtentReport.html").toString();
+                        FileComparisonSummary summary = generateExtentReport(fileName, comparisonResult, extentReportPath, reportFolder);
+                        summaryList.add(summary);
+                    } catch (CsvValidationException ex) {
+                    throw new RuntimeException(ex);
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
                 }
-            });
+
+            }
+
+            );
+
 
             // Generate final consolidated Extent Report
             String consolidatedReportPath = Paths.get(baseOutputPath, "Consolidated_ExtentReport.html").toString();
@@ -67,6 +90,55 @@ public class DynamicReportGenerator {
 
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+    private static boolean arePrimaryKeyColumnsPresent(List<List<String>> fileData, List<String> primaryKeyColumns) {
+        // Check if the first row contains all primary key columns
+        List<String> firstRow = fileData.isEmpty() ? null : fileData.get(0);
+        System.out.println(firstRow + "first row");
+        System.out.println("Primary Key Columns: " + primaryKeyColumns);
+
+        if (firstRow == null) {
+            return false; // No data in the file
+        }
+
+        for (String primaryKeyColumn : primaryKeyColumns) {
+            if (!firstRow.contains(primaryKeyColumn)) {
+                return false; // Primary key column not found in the first row
+            }
+        }
+        return true;
+    }
+
+
+
+
+    private static List<List<String>> readFile(String filePath) throws IOException, CsvValidationException {
+        if (filePath.endsWith(".csv")) {
+            return FileComparisonUtils.readCSV(filePath);
+        } else if (filePath.endsWith(".xlsx") || filePath.endsWith(".xls")) {
+            try {
+                if (isValidExcelFile(filePath)) {
+                    return FileComparisonUtils.readExcel(filePath);
+                } else {
+                    throw new IllegalArgumentException("File is not a valid Excel file: " + filePath);
+                }
+            } catch (NotOfficeXmlFileException e) {
+                throw new IllegalArgumentException("File is not a valid Excel file: " + filePath, e);
+            }
+        } else if (filePath.endsWith(".txt")) {
+            return FileComparisonUtils.readTextFile(filePath);
+        } else {
+            throw new IllegalArgumentException("Unsupported file format: " + filePath);
+        }
+    }
+
+    private static boolean isValidExcelFile(String filePath) throws IOException {
+        try (InputStream is = Files.newInputStream(Paths.get(filePath))) {
+            OPCPackage.open(is).close();
+            return true;
+        } catch (InvalidFormatException | NotOfficeXmlFileException e) {
+            return false;
         }
     }
 
@@ -172,58 +244,5 @@ public class DynamicReportGenerator {
         summaryTest.addScreenCaptureFromPath(overallChartPath);
 
         extent.flush();
-    }
-
-    private static List<List<String>> readFile(String filePath) throws IOException, CsvValidationException {
-        if (filePath.endsWith(".csv")) {
-            return FileComparisonUtils.readCSV(filePath);
-        } else if (filePath.endsWith(".xlsx") || filePath.endsWith(".xls")) {
-            try {
-                if (isValidExcelFile(filePath)) {
-                    return FileComparisonUtils.readExcel(filePath);
-                } else {
-                    throw new IllegalArgumentException("File is not a valid Excel file: " + filePath);
-                }
-            } catch (NotOfficeXmlFileException e) {
-                throw new IllegalArgumentException("File is not a valid Excel file: " + filePath, e);
-            }
-        } else if (filePath.endsWith(".txt")) {
-            return FileComparisonUtils.readTextFile(filePath);
-        } else {
-            throw new IllegalArgumentException("Unsupported file format: " + filePath);
-        }
-    }
-
-    private static boolean isValidExcelFile(String filePath) throws IOException {
-        try (InputStream is = Files.newInputStream(Paths.get(filePath))) {
-            OPCPackage.open(is).close();
-            return true;
-        } catch (InvalidFormatException | NotOfficeXmlFileException e) {
-            return false;
-        }
-    }
-}
-
-class FileComparisonSummary {
-    private final String fileName;
-    private final int matchedColumns;
-    private final int unmatchedColumns;
-
-    public FileComparisonSummary(String fileName, int matchedColumns, int unmatchedColumns) {
-        this.fileName = fileName;
-        this.matchedColumns = matchedColumns;
-        this.unmatchedColumns = unmatchedColumns;
-    }
-
-    public String getFileName() {
-        return fileName;
-    }
-
-    public int getMatchedColumns() {
-        return matchedColumns;
-    }
-
-    public int getUnmatchedColumns() {
-        return unmatchedColumns;
     }
 }

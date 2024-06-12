@@ -29,11 +29,14 @@ public class ReportUtils {
             for (int j = 0; j < rowData.length; j++) {
                 String cell = rowData[j];
                 if (cell != null && !cell.isEmpty()) {
-                    if (rowData[0].equals("Tolerance") && j > 0) { // Tolerance row check
-                        htmlBuilder.append("<td>").append(cell).append("</td>");
-                    } else {
-                        htmlBuilder.append("<td>").append(cell).append("</td>");
+                    String cellStyle = "";
+                    if (i % 4 == 0) {  // Bold the Trade ID row
+                        cellStyle = "font-weight:bold;";
+                    } else if (rowData[0].equals("Difference") && j > 0 && !"matched".equals(cell)) {
+                        cellStyle = "background-color:yellow;";
                     }
+
+                    htmlBuilder.append("<td style='" + cellStyle + "'>").append(cell).append("</td>");
                 } else {
                     htmlBuilder.append("<td></td>");
                 }
@@ -87,6 +90,7 @@ public class ReportUtils {
 
 
 
+
     public static void generateExcelReport(String filePath, List<String[]> reportData) throws IOException {
         if (reportData.isEmpty()) {
             System.out.println("No data to generate report. Excel report will not be generated.");
@@ -106,6 +110,15 @@ public class ReportUtils {
         CellStyle redStyle = workbook.createCellStyle();
         redStyle.setFillForegroundColor(IndexedColors.RED.getIndex());
         redStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle boldStyle = workbook.createCellStyle();
+        Font boldFont = workbook.createFont();
+        boldFont.setBold(true);
+        boldStyle.setFont(boldFont);
+
+        CellStyle yellowStyle = workbook.createCellStyle();
+        yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
         int rowNum = 0;
 
@@ -141,7 +154,10 @@ public class ReportUtils {
             Row toleranceExcelRow = sheet.createRow(rowNum++);
 
             int cellNum = 0;
-            tradeIdExcelRow.createCell(cellNum).setCellValue(tradeIdRow[0]);
+            Cell tradeIdCell = tradeIdExcelRow.createCell(cellNum);
+            tradeIdCell.setCellValue(tradeIdRow[0]);
+            tradeIdCell.setCellStyle(boldStyle);
+
             dataInEnv1ExcelRow.createCell(cellNum).setCellValue(dataInEnv1[0]);
             dataInEnv2ExcelRow.createCell(cellNum).setCellValue(dataInEnv2[0]);
             differenceExcelRow.createCell(cellNum).setCellValue(differenceRow[0]);
@@ -150,10 +166,15 @@ public class ReportUtils {
             for (int j = 1; j < differenceRow.length; j++) {
                 if (!"matched".equals(differenceRow[j])) {
                     cellNum++;
-                    tradeIdExcelRow.createCell(cellNum).setCellValue(tradeIdRow[j]);
+                    Cell headerCell = tradeIdExcelRow.createCell(cellNum);
+                    headerCell.setCellValue(tradeIdRow[j]);
+                    headerCell.setCellStyle(boldStyle);
+
                     dataInEnv1ExcelRow.createCell(cellNum).setCellValue(dataInEnv1[j]);
                     dataInEnv2ExcelRow.createCell(cellNum).setCellValue(dataInEnv2[j]);
-                    differenceExcelRow.createCell(cellNum).setCellValue(differenceRow[j]);
+                    Cell diffCell = differenceExcelRow.createCell(cellNum);
+                    diffCell.setCellValue(differenceRow[j]);
+                    diffCell.setCellStyle(yellowStyle);
 
                     double differenceValue = parseDouble(differenceRow[j]);
                     Cell toleranceCell = toleranceExcelRow.createCell(cellNum);
@@ -182,6 +203,7 @@ public class ReportUtils {
         System.out.println("Excel report generated successfully at: " + filePath);
         System.out.println("Execution ended for Excel report generation.");
     }
+
 
     private static double parseDouble(String str) {
         try {
