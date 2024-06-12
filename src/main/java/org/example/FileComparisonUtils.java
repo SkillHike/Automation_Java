@@ -124,45 +124,80 @@ public class FileComparisonUtils {
 
         Map<String, List<String>> file1Map = buildDataMap(file1Data);
         Map<String, List<String>> file2Map = buildDataMap(file2Data);
+        System.out.println(file1Data+"-------filemap---------"+file2Data);
 
-        return performComparison(file1Map, file2Map, primaryKeyColumns1, primaryKeyColumns2, headerMap1, headerMap2);
+        return performComparison(file1Map, file2Map, primaryKeyColumns1);
     }
 
-
-    private static List<String[]> performComparison(Map<String, List<String>> file1Map, Map<String, List<String>> file2Map, List<String> primaryKeyColumns1, List<String> primaryKeyColumns2, Map<String, Integer> headerMap1, Map<String, Integer> headerMap2) {
+    private static List<String[]> performComparison(Map<String, List<String>> file1Map, Map<String, List<String>> file2Map, List<String> primaryKeyColumns) {
         List<String[]> differences = new ArrayList<>();
 
-        // Check for rows in file1 but not in file2
+        // Ensure that both maps are not empty
+        if (file1Map.isEmpty() || file2Map.isEmpty()) {
+            System.err.println("One or both of the maps are empty.");
+            return differences;
+        }
+
+        // Compare column values and calculate differences
+        Map<String, Integer> headerMap1 = buildHeaderMap(file1Map.get(file1Map.keySet().iterator().next()));
+        Map<String, Integer> headerMap2 = buildHeaderMap(file2Map.get(file2Map.keySet().iterator().next()));
+
         for (Map.Entry<String, List<String>> entry : file1Map.entrySet()) {
             String key = entry.getKey();
-            if (!file2Map.containsKey(key)) {
-                differences.add(new String[]{"Missing in File2", key, entry.getValue().toString()});
-            } else {
+            if (file2Map.containsKey(key)) {
                 List<String> row1 = entry.getValue();
                 List<String> row2 = file2Map.get(key);
 
-                // Compare using primary key columns for each file
-                for (String primaryKey : primaryKeyColumns1) {
-                    Integer index1 = headerMap1.get(primaryKey);
-                    Integer index2 = headerMap2.get(primaryKey);
+                for (String columnName : headerMap1.keySet()) {
+                    Integer index1 = headerMap1.get(columnName);
+                    Integer index2 = headerMap2.get(columnName);
 
-                    if (index1 != null && index2 != null && !row1.get(index1).equals(row2.get(index2))) {
-                        differences.add(new String[]{"Difference", key, primaryKey, row1.get(index1), row2.get(index2)});
+                    // Check if both indexes are not null
+                    if (index1 != null && index2 != null) {
+                        // Check if the rows have enough columns
+                        if (index1 < row1.size() && index2 < row2.size()) {
+                            String value1 = row1.get(index1);
+                            String value2 = row2.get(index2);
+
+                            // Compare values based on their types
+                            if (isNumeric(value1) && isNumeric(value2)) {
+                                double numericValue1 = Math.abs(Double.parseDouble(value1));
+                                double numericValue2 = Math.abs(Double.parseDouble(value2));
+                                double difference = numericValue1 - numericValue2;
+                                String[] differenceEntry = {key, columnName, String.valueOf(difference)};
+                                differences.add(differenceEntry);
+                            } else {
+                                if (!value1.equals(value2)) {
+                                    // Values are not equal, so store the difference
+                                    String[] differenceEntry = {key, columnName, "Values are not equal"};
+                                    differences.add(differenceEntry);
+                                }
+                            }
+                        } else {
+                            // Handle the case where the rows do not have enough columns
+                            System.err.println("Row does not have enough columns for comparison: " + columnName);
+                        }
+                    } else {
+                        // Handle the case where the column is not present in one of the files
+                        System.err.println("Column not found in one of the files: " + columnName);
                     }
                 }
             }
         }
 
-        // Check for rows in file2 but not in file1
-        for (Map.Entry<String, List<String>> entry : file2Map.entrySet()) {
-            String key = entry.getKey();
-            if (!file1Map.containsKey(key)) {
-                differences.add(new String[]{"Missing in File1", key, entry.getValue().toString()});
-            }
-        }
-
         return differences;
     }
+
+    private static boolean isNumeric(String str) {
+        try {
+            Double.parseDouble(str);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+
 
 
     private static Map<String, Integer> buildHeaderMap(List<String> headerRow) {
@@ -176,14 +211,36 @@ public class FileComparisonUtils {
     private static Map<String, List<String>> buildDataMap(List<List<String>> data) {
         Map<String, List<String>> dataMap = new HashMap<>();
 
-        for (List<String> row : data) {
-            if (row.size() >= 3 && "yes".equalsIgnoreCase(row.get(2))) { // Check if column 3 has "yes"
-                String key = row.get(1); // Pick the value from column 2 as the primary key
-                System.out.println("key=" + key + "  row=" + row);
-                dataMap.put(key, row);
+        // Assuming the first row contains the header, so we skip it
+        for (int i = 1; i < data.size(); i++) {
+            List<String> row = data.get(i);
+
+            // Check if the row has enough elements
+            if (row == null || row.size() < 4) { // Adjusted to 4 since your data seems to have 4 columns
+                System.err.println("Row is null or does not have enough elements: " + row);
+                continue; // Skip this row
             }
+
+            String key = row.get(0); // Assuming the key is in the first column
+            List<String> rowData = new ArrayList<>(row.subList(1, row.size()));
+
+            // Convert the string representation of numbers to doubles
+            for (int j = 0; j < rowData.size(); j++) {
+                try {
+                    Double.parseDouble(rowData.get(j));
+                } catch (NumberFormatException e) {
+                    System.err.println("Invalid numeric value: " + rowData.get(j));
+                    rowData.set(j, "0.0"); // Set to a default value or handle the error accordingly
+                }
+            }
+
+            // Put the data into the map
+            dataMap.put(key, rowData);
         }
 
         return dataMap;
     }
+
+
+
 }

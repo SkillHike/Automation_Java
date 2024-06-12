@@ -60,6 +60,7 @@ public class DynamicReportGenerator {
                     System.out.println(primaryKeyColumns1 + "====PK for file 1");
                     System.out.println(primaryKeyColumns2 + "====PK for file 2");
                     List<String[]> comparisonResult = FileComparisonUtils.compareFiles(file1Data, file2Data, primaryKeyColumns1, primaryKeyColumns2);
+                    System.out.println("comparision :"+comparisonResult);
                         // Generate HTML and Excel reports
                         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
                         String reportFolder = Paths.get(baseOutputPath, fileName + "_" + timestamp).toString();
