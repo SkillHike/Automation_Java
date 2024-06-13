@@ -1,4 +1,4 @@
-TradeID	S	a	d
+TradeID	Risk	Curve	Type
 1234	673	537	735
 1235	638	575	736
 1236	639	510	737

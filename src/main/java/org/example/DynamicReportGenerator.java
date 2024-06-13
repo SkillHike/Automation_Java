@@ -19,49 +19,58 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 public class DynamicReportGenerator {
 
     public static void generateReports(String folder1, String folder2, String baseOutputPath, String excelFileName) {
         List<FileComparisonSummary> summaryList = new ArrayList<>();
+        ExcelReader reader = new ExcelReader();
 
         try {
-            List<List<String>> file1Data = readFile(folder1 + "\\" + excelFileName);
-            List<List<String>> file2Data = readFile(folder2 + "\\" + excelFileName);
+            // Check if primary keys match in both sheets
+            boolean primaryKeysMatch = reader.arePrimaryKeysPresentInBothSheets(folder1, folder2, excelFileName);
 
-            System.out.println("Comparison started for " + excelFileName);
+            if (primaryKeysMatch) {
 
-            List<String[]> comparisonResult = FileComparisonUtils.compareFiles(file1Data, file2Data);
+                Set<String> primaryKeys = new HashSet<>(reader.getPrimaryKeyColumnNames(folder1 + "\\", excelFileName));
 
-            System.out.println("Comparison completed for " + excelFileName);
+                List<List<String>> file1Data = readFile(folder1 + "\\" + excelFileName);
+                List<List<String>> file2Data = readFile(folder2 + "\\" + excelFileName);
 
-            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-            String outputDir = Paths.get(baseOutputPath, excelFileName + "_" + timestamp).toString();
-            Files.createDirectories(Paths.get(outputDir));
+                System.out.println("Comparison started for " + excelFileName);
+                System.out.println(file1Data + "============" + file2Data);
 
-            String htmlReportPath = Paths.get(outputDir, "report.html").toString();
-            String excelReportPath = Paths.get(outputDir, "report.xlsx").toString();
+                List<String[]> comparisonResult = FileComparisonUtils.compareFiles(file1Data, file2Data);
 
-            ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult);
-            ReportUtils.generateExcelReport(excelReportPath, comparisonResult);
+                System.out.println("Comparison completed for " + excelFileName);
 
-            // Generate individual Extent Report for each file comparison
-            String extentReportPath = Paths.get(outputDir, "ExtentReport.html").toString();
-            FileComparisonSummary summary = generateExtentReport(excelFileName, comparisonResult, extentReportPath, outputDir);
-            summaryList.add(summary);
+                String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+                String outputDir = Paths.get(baseOutputPath, excelFileName + "_" + timestamp).toString();
+                Files.createDirectories(Paths.get(outputDir));
 
-            // Generate final consolidated Extent Report
-            String consolidatedReportPath = Paths.get(baseOutputPath, "Consolidated_ExtentReport.html").toString();
-            generateConsolidatedReport(summaryList, consolidatedReportPath);
+                String htmlReportPath = Paths.get(outputDir, "report.html").toString();
+                String excelReportPath = Paths.get(outputDir, "report.xlsx").toString();
+
+                ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult,primaryKeys);
+                ReportUtils.generateExcelReport(excelReportPath, comparisonResult,primaryKeys);
+
+                // Generate individual Extent Report for each file comparison
+                String extentReportPath = Paths.get(outputDir, "ExtentReport.html").toString();
+                FileComparisonSummary summary = generateExtentReport(excelFileName, comparisonResult, extentReportPath, outputDir);
+                summaryList.add(summary);
+
+                // Generate final consolidated Extent Report
+                String consolidatedReportPath = Paths.get(baseOutputPath, "Consolidated_ExtentReport.html").toString();
+                generateConsolidatedReport(summaryList, consolidatedReportPath);
+            } else {
+                System.out.println("Primary keys did not match for: " + excelFileName);
+            }
 
         } catch (IOException | CsvValidationException e) {
             e.printStackTrace();
         }
     }
-
 
     private static FileComparisonSummary generateExtentReport(String fileName, List<String[]> comparisonResult, String reportPath, String outputDir) throws IOException {
         ExtentSparkReporter sparkReporter = new ExtentSparkReporter(reportPath);
@@ -196,6 +205,8 @@ public class DynamicReportGenerator {
         }
     }
 }
+
+
 
 class FileComparisonSummary {
     private final String fileName;

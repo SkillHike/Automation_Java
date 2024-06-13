@@ -8,9 +8,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Set;
 
 public class ReportUtils {
-    public static void generateHTMLReport(String filePath, List<String[]> reportData) throws IOException {
+    public static void generateHTMLReport(String filePath, List<String[]> reportData, Set<String> primaryKeys) throws IOException {
         if (reportData.isEmpty()) {
             System.out.println("No data to generate report. HTML report will not be generated.");
             return;
@@ -67,6 +68,24 @@ public class ReportUtils {
                     }
                 }
                 htmlBuilder.append("</tr>");
+
+                // Insert Primary Key row after Tolerance row
+                String[] primaryKeyRow = new String[rowData.length];
+                primaryKeyRow[0] = "Primary Key";
+                for (int k = 1; k < rowData.length; k++) {
+
+                    primaryKeyRow[k] = primaryKeys.contains(rowData[k]) ? "No" : "Yes";
+                }
+                htmlBuilder.append("<tr>");
+                for (int j = 0; j < primaryKeyRow.length; j++) {
+                    String cell = primaryKeyRow[j];
+                    if ("Yes".equalsIgnoreCase(cell)) {
+                        htmlBuilder.append("<td style='background-color:blue;'>").append(cell).append("</td>");
+                    } else {
+                        htmlBuilder.append("<td>").append(cell).append("</td>");
+                    }
+                }
+                htmlBuilder.append("</tr>");
             }
 
             if (i % 5 == 4) {
@@ -85,13 +104,7 @@ public class ReportUtils {
         System.out.println("Execution ended for HTML report generation.");
     }
 
-
-
-
-
-
-
-    public static void generateExcelReport(String filePath, List<String[]> reportData) throws IOException {
+    public static void generateExcelReport(String filePath, List<String[]> reportData, Set<String> primaryKeys) throws IOException {
         if (reportData.isEmpty()) {
             System.out.println("No data to generate report. Excel report will not be generated.");
             return;
@@ -119,6 +132,10 @@ public class ReportUtils {
         CellStyle yellowStyle = workbook.createCellStyle();
         yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
         yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle blueStyle = workbook.createCellStyle();
+        blueStyle.setFillForegroundColor(IndexedColors.BLUE.getIndex());
+        blueStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
         int rowNum = 0;
 
@@ -152,6 +169,7 @@ public class ReportUtils {
             Row dataInEnv2ExcelRow = sheet.createRow(rowNum++);
             Row differenceExcelRow = sheet.createRow(rowNum++);
             Row toleranceExcelRow = sheet.createRow(rowNum++);
+            Row primaryKeyExcelRow = sheet.createRow(rowNum++);
 
             int cellNum = 0;
             Cell tradeIdCell = tradeIdExcelRow.createCell(cellNum);
@@ -162,6 +180,7 @@ public class ReportUtils {
             dataInEnv2ExcelRow.createCell(cellNum).setCellValue(dataInEnv2[0]);
             differenceExcelRow.createCell(cellNum).setCellValue(differenceRow[0]);
             toleranceExcelRow.createCell(cellNum).setCellValue("Tolerance");
+            primaryKeyExcelRow.createCell(cellNum).setCellValue("Primary Key");
 
             for (int j = 1; j < differenceRow.length; j++) {
                 if (!"matched".equals(differenceRow[j])) {
@@ -187,6 +206,11 @@ public class ReportUtils {
                             toleranceCell.setCellStyle(greenStyle);
                         }
                     }
+
+                    // Check if the column is a primary key
+                    Cell primaryKeyCell = primaryKeyExcelRow.createCell(cellNum);
+                    primaryKeyCell.setCellValue(primaryKeys.contains(tradeIdRow[j]) ? "Yes" : "No");
+                    primaryKeyCell.setCellStyle(blueStyle);
                 }
             }
 
@@ -198,19 +222,15 @@ public class ReportUtils {
             workbook.write(outputStream);
         }
 
-        workbook.close();
-
         System.out.println("Excel report generated successfully at: " + filePath);
         System.out.println("Execution ended for Excel report generation.");
     }
 
-
-    private static double parseDouble(String str) {
+    private static double parseDouble(String value) {
         try {
-            return Double.parseDouble(str);
+            return Double.parseDouble(value);
         } catch (NumberFormatException e) {
             return Double.NaN;
         }
     }
 }
-
