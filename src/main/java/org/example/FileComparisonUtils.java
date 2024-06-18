@@ -63,34 +63,52 @@ public class FileComparisonUtils {
     public static List<String[]> compareFiles(List<List<String>> file1Data, List<List<String>> file2Data) {
         List<String[]> results = new ArrayList<>();
 
+        // Determine number of rows and columns based on file1Data (assuming file1Data contains headers)
         int numRows = Math.max(file1Data.size(), file2Data.size());
-        List<String> headers = file1Data.get(0);
+        List<String> headers = file1Data.get(0); // Assuming headers are in the first row of file1Data
         int numCols = headers.size();
 
+        // Iterate through the rows (excluding headers) of file1Data and file2Data
         for (int i = 1; i < numRows; i++) {
             List<String> row1 = i < file1Data.size() ? file1Data.get(i) : new ArrayList<>();
             List<String> row2 = i < file2Data.size() ? file2Data.get(i) : new ArrayList<>();
 
-            String tradeId = i < file1Data.size() ? row1.get(0) : row2.get(0);
-            String[] tradeIdRow = new String[numCols];
-            tradeIdRow[0] = tradeId;
-            for (int j = 1; j < numCols; j++) {
-                tradeIdRow[j] = headers.get(j);
-            }
-            results.add(tradeIdRow);
+            // Extract trade ID (assuming it's the first column in both file1Data and file2Data)
+            String tradeId = i < file1Data.size() ? file1Data.get(i).get(0) : file2Data.get(i).get(0);
 
+            // Create trade data row and add to results
+            results.add(createTradeData(headers, tradeId, row1, row2, numCols));
+
+            // Add data in environment 1 (row1) to results
             results.add(createRowData("Data in Env1", row1, row2, numCols));
+
+            // Add data in environment 2 (row2) to results
             results.add(createRowData("Data in Env2", row2, row1, numCols));
+
+            // Add difference row between row1 and row2 to results
             results.add(createDifferenceRow(row1, row2, numCols));
         }
 
         return results;
     }
 
+    // Method to create trade data row based on column headers, trade ID, and row data from both environments
+    private static String[] createTradeData(List<String> headers, String tradeId, List<String> row1, List<String> row2, int numCols) {
+        String[] tradeDataRow = new String[numCols];
+
+
+        // Set column names as the rest of the elements in the row
+        for (int j = 0; j < numCols; j++) {
+            tradeDataRow[j] = headers.get(j);
+        }
+
+        return tradeDataRow;
+    }
+
     private static String[] createRowData(String label, List<String> rowData, List<String> comparisonData, int numCols) {
         String[] row = new String[numCols];
         row[0] = label;
-        for (int j = 1; j < numCols; j++) {
+        for (int j = 0; j < numCols; j++) {
             String cellValue = rowData.size() > j ? rowData.get(j) : "";
             String compareValue = comparisonData.size() > j ? comparisonData.get(j) : "";
             if (cellValue.equals(compareValue)) {
@@ -105,7 +123,7 @@ public class FileComparisonUtils {
     private static String[] createDifferenceRow(List<String> row1, List<String> row2, int numCols) {
         String[] row = new String[numCols];
         row[0] = "Difference";
-        for (int j = 1; j < numCols; j++) {
+        for (int j = 0; j < numCols; j++) {
             if (j < row1.size() && j < row2.size()) {
                 double value1 = parseDouble(row1.get(j));
                 double value2 = parseDouble(row2.get(j));

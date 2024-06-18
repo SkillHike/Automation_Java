@@ -52,6 +52,8 @@ public class DynamicReportGenerator {
                 String htmlReportPath = Paths.get(outputDir, "report.html").toString();
                 String excelReportPath = Paths.get(outputDir, "report.xlsx").toString();
 
+
+
                 ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult,primaryKeys);
                 ReportUtils.generateExcelReport(excelReportPath, comparisonResult,primaryKeys);
 

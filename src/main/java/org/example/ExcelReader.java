@@ -4,6 +4,8 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 
 public class ExcelReader {
@@ -29,10 +31,17 @@ public class ExcelReader {
         String fullPath = filePath + reportName;
 
         try {
+            if (isFileSizeExceeded(fullPath, 15)) {
+                System.out.println("File size exceeds the limit of 15MB: " + reportName);
+                return columnNames;
+            }
+
             if (reportName.endsWith(".xlsx")) {
                 columnNames = getExcelPrimaryKeyColumnNames(fullPath);
             } else if (reportName.endsWith(".txt")) {
                 columnNames = getTextFilePrimaryKeyColumnNames(fullPath);
+            } else if (reportName.endsWith(".csv")) {
+                columnNames = getCSVFilePrimaryKeyColumnNames(fullPath);
             } else {
                 throw new IllegalArgumentException("Unsupported file type: " + reportName);
             }
@@ -41,6 +50,13 @@ public class ExcelReader {
         }
 
         return columnNames;
+    }
+
+    private boolean isFileSizeExceeded(String filePath, int sizeLimitMB) throws IOException {
+        File file = new File(filePath);
+        long fileSizeInBytes = Files.size(Paths.get(filePath));
+        long fileSizeInMB = fileSizeInBytes / (1024 * 1024);
+        return fileSizeInMB > sizeLimitMB;
     }
 
     private List<String> getExcelPrimaryKeyColumnNames(String fullPath) throws IOException {
@@ -110,11 +126,37 @@ public class ExcelReader {
         return columnNames;
     }
 
+    private List<String> getCSVFilePrimaryKeyColumnNames(String fullPath) throws IOException {
+        List<String> columnNames = new ArrayList<>();
+
+        try (BufferedReader br = new BufferedReader(new FileReader(fullPath))) {
+            String headerLine = br.readLine();
+
+            if (headerLine == null) {
+                return columnNames; // No header line, return empty list
+            }
+
+            String[] headers = headerLine.split(","); // Assuming comma-separated headers
+            columnNames.addAll(Arrays.asList(headers));
+        }
+
+        return columnNames;
+    }
+
     public boolean arePrimaryKeysPresentInBothSheets(String folder1, String folder2, String fileName) {
         String filePath1 = folder1 + "\\" + fileName;
         String filePath2 = folder2 + "\\" + fileName;
 
         try {
+            if (isFileSizeExceeded(filePath1, 15)) {
+                System.out.println("File size exceeds the limit of 15MB: " + filePath1);
+                return false;
+            }
+            if (isFileSizeExceeded(filePath2, 15)) {
+                System.out.println("File size exceeds the limit of 15MB: " + filePath2);
+                return false;
+            }
+
             Set<String> primaryKeys1 = getPrimaryKeys(filePath1);
             Set<String> primaryKeys2 = getPrimaryKeys(filePath2);
 
@@ -131,6 +173,8 @@ public class ExcelReader {
             return getPrimaryKeysFromSheet(filePath);
         } else if (filePath.endsWith(".txt")) {
             return getPrimaryKeysFromTextFile(filePath);
+        } else if (filePath.endsWith(".csv")) {
+            return getPrimaryKeysFromCSVFile(filePath);
         } else {
             throw new IllegalArgumentException("Unsupported file type: " + filePath);
         }
@@ -156,6 +200,8 @@ public class ExcelReader {
             }
         }
 
+
+
         return primaryKeys;
     }
 
@@ -170,6 +216,25 @@ public class ExcelReader {
             }
 
             String[] headers = headerLine.split("\\t");
+            for (String header : headers) {
+                primaryKeys.add(header.trim());
+            }
+        }
+
+        return primaryKeys;
+    }
+
+    private Set<String> getPrimaryKeysFromCSVFile(String filePath) throws IOException {
+        Set<String> primaryKeys = new HashSet<>();
+
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String headerLine = br.readLine();
+
+            if (headerLine == null) {
+                return primaryKeys; // No header line, return empty set
+            }
+
+            String[] headers = headerLine.split(",");
             for (String header : headers) {
                 primaryKeys.add(header.trim());
             }

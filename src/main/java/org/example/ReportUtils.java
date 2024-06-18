@@ -11,11 +11,13 @@ import java.util.List;
 import java.util.Set;
 
 public class ReportUtils {
+
     public static void generateHTMLReport(String filePath, List<String[]> reportData, Set<String> primaryKeys) throws IOException {
         if (reportData.isEmpty()) {
             System.out.println("No data to generate report. HTML report will not be generated.");
             return;
         }
+
 
         System.out.println("Execution started for HTML report generation.");
 
@@ -24,77 +26,133 @@ public class ReportUtils {
         htmlBuilder.append("<h1>Comparison Report</h1>");
         htmlBuilder.append("<table border='1'>");
 
-        for (int i = 0; i < reportData.size(); i++) {
-            String[] rowData = reportData.get(i);
-            htmlBuilder.append("<tr>");
-            for (int j = 0; j < rowData.length; j++) {
-                String cell = rowData[j];
-                if (cell != null && !cell.isEmpty()) {
-                    String cellStyle = "";
-                    if (i % 4 == 0) {  // Bold the Trade ID row
-                        cellStyle = "font-weight:bold;";
-                    } else if (rowData[0].equals("Difference") && j > 0 && !"matched".equals(cell)) {
-                        cellStyle = "background-color:yellow;";
-                    }
+        // Initialize a boolean array to track columns to remove
+        boolean[] removeColumn = new boolean[reportData.get(0).length];
 
-                    htmlBuilder.append("<td style='" + cellStyle + "'>").append(cell).append("</td>");
-                } else {
-                    htmlBuilder.append("<td></td>");
+        // Check for columns with all empty or matched cells (excluding header)
+        for (int j = 0; j < reportData.get(0).length; j++) {
+            boolean isEmptyColumn = true;
+            boolean isMatchedColumn = true;
+            for (int i = 0; i < reportData.size(); i++) {
+                String[] rowData = reportData.get(i);
+                if (!"".equals(rowData[j].trim())) {
+                    isEmptyColumn = false;
+                }
+                if (!"matched".equals(rowData[j])) {
+                    isMatchedColumn = false;
+                }
+            }
+            removeColumn[j] = isEmptyColumn || isMatchedColumn;
+        }
+
+        // Iterate over the reportData in chunks of 4 (column names, dataInEnv1, dataInEnv2, difference)
+        for (int i = 0; i < reportData.size(); i += 4) {
+            if (i + 3 >= reportData.size()) {
+                System.out.println("Skipping incomplete set of rows at index: " + i);
+                break; // Skip incomplete sets of rows
+            }
+
+            String[] columnNames = reportData.get(i);
+            String[] dataInEnv1 = reportData.get(i + 1);
+            String[] dataInEnv2 = reportData.get(i + 2);
+            String[] difference = reportData.get(i + 3);
+
+            // Check if there's an actual difference
+            boolean hasDifference = false;
+            for (int j = 1; j < difference.length; j++) {
+                if (!"matched".equals(difference[j])) {
+                    hasDifference = true;
+                    break;
+                }
+            }
+
+            // Skip processing if there are no differences
+            if (!hasDifference) {
+                continue;
+            }
+
+            // Begin adding rows to the HTML table
+            htmlBuilder.append("<tr>");
+
+            // First column header as "Column Names"
+            htmlBuilder.append("<th>").append("Column Names").append("</th>");
+
+            // Iterate over column names to create header row
+            for (int j = 0; j < columnNames.length; j++) {
+                if (!removeColumn[j]) {
+                    boolean isPrimaryKey = primaryKeys.contains(columnNames[j]);
+                    if (isPrimaryKey) {
+                        htmlBuilder.append("<th style='background-color: orange;'>").append(columnNames[j]).append("</th>");
+                    } else {
+                        htmlBuilder.append("<th>").append(columnNames[j]).append("</th>");
+                    }
                 }
             }
             htmlBuilder.append("</tr>");
 
-            if (rowData[0].equals("Difference")) {
-                // Insert Tolerance row after Difference row
-                String[] toleranceRow = new String[rowData.length];
-                toleranceRow[0] = "Tolerance";
-                for (int k = 1; k < rowData.length; k++) {
-                    double difference = parseDouble(rowData[k]);
-                    if (!Double.isNaN(difference) && Math.abs(difference) > 0.5) {
-                        toleranceRow[k] = "Yes";
-                    } else {
-                        toleranceRow[k] = "No";
-                    }
-                }
-                htmlBuilder.append("<tr>");
-                for (int j = 0; j < toleranceRow.length; j++) {
-                    String cell = toleranceRow[j];
-                    if ("Yes".equals(cell)) {
-                        htmlBuilder.append("<td style='background-color:red;'>").append(cell).append("</td>");
-                    } else if ("No".equals(cell)) {
-                        htmlBuilder.append("<td style='background-color:green;'>").append(cell).append("</td>");
-                    } else {
-                        htmlBuilder.append("<td>").append(cell).append("</td>");
-                    }
-                }
-                htmlBuilder.append("</tr>");
 
-                // Insert Primary Key row after Tolerance row
-                String[] primaryKeyRow = new String[rowData.length];
-                primaryKeyRow[0] = "Primary Key";
-                for (int k = 1; k < rowData.length; k++) {
-
-                    primaryKeyRow[k] = primaryKeys.contains(rowData[k]) ? "No" : "Yes";
+            // Data in Env1 row
+            htmlBuilder.append("<tr>");
+            htmlBuilder.append("<td>").append("Data in Env1").append("</td>");
+            for (int j = 0; j < dataInEnv1.length; j++) {
+                if (!removeColumn[j]) {
+                    htmlBuilder.append("<td>").append(dataInEnv1[j]).append("</td>");
                 }
-                htmlBuilder.append("<tr>");
-                for (int j = 0; j < primaryKeyRow.length; j++) {
-                    String cell = primaryKeyRow[j];
-                    if ("Yes".equalsIgnoreCase(cell)) {
-                        htmlBuilder.append("<td style='background-color:blue;'>").append(cell).append("</td>");
-                    } else {
-                        htmlBuilder.append("<td>").append(cell).append("</td>");
-                    }
-                }
-                htmlBuilder.append("</tr>");
             }
+            htmlBuilder.append("</tr>");
 
-            if (i % 5 == 4) {
-                htmlBuilder.append("<tr><td colspan='").append(reportData.get(0).length).append("'></td></tr>");  // Empty row after each set of rows
+            // Data in Env2 row
+            htmlBuilder.append("<tr>");
+            htmlBuilder.append("<td>").append("Data in Env2").append("</td>");
+            for (int j = 0; j < dataInEnv2.length; j++) {
+                if (!removeColumn[j]) {
+                    htmlBuilder.append("<td>").append(dataInEnv2[j]).append("</td>");
+                }
             }
+            htmlBuilder.append("</tr>");
+
+            // Difference row
+            htmlBuilder.append("<tr>");
+            htmlBuilder.append("<td>").append("Difference").append("</td>");
+            for (int j = 0; j < difference.length; j++) {
+                if (!removeColumn[j]) {
+                    String cell = difference[j];
+                    if (!"matched".equals(cell) && !"".equals(cell.trim())) {
+                        double differenceValue = parseDouble(cell);
+                        String cellStyle = getToleranceCellStyle(differenceValue);
+                        htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(cell).append("</td>");
+                    } else {
+                        htmlBuilder.append("<td></td>"); // Skip matched or blank cell
+                    }
+                }
+            }
+            htmlBuilder.append("</tr>");
+
+            // Insert Tolerance row after Difference row
+            htmlBuilder.append("<tr>");
+            htmlBuilder.append("<td>").append("Tolerance").append("</td>");
+            for (int j = 0; j < difference.length; j++) {
+                if (!removeColumn[j]) {
+                    String cell = difference[j];
+                    if (!"matched".equals(cell) && !"".equals(cell.trim())) {
+                        double differenceValue = parseDouble(cell);
+                        String cellStyle = getToleranceCellStyle(differenceValue);
+                        htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(getToleranceLabel(differenceValue)).append("</td>");
+                    } else {
+                        htmlBuilder.append("<td></td>"); // Skip matched or blank cell
+                    }
+                }
+            }
+            htmlBuilder.append("</tr>");
+
+            // No Primary Key row included
+
+            htmlBuilder.append("<tr><td colspan='").append(columnNames.length + 1).append("'></td></tr>"); // Empty row after each set of rows
         }
 
         htmlBuilder.append("</table></body></html>");
 
+        // Write the HTML content to file
         Files.createDirectories(Paths.get(filePath).getParent());
         try (FileOutputStream outputStream = new FileOutputStream(filePath)) {
             outputStream.write(htmlBuilder.toString().getBytes());
@@ -102,6 +160,36 @@ public class ReportUtils {
 
         System.out.println("HTML report generated successfully at: " + filePath);
         System.out.println("Execution ended for HTML report generation.");
+    }
+
+
+    private static String getToleranceCellStyle(double differenceValue) {
+        if (!Double.isNaN(differenceValue)) {
+            if (Math.abs(differenceValue) < 0.5) {
+                return "background-color:green;";
+            } else if (Math.abs(differenceValue) < 1) {
+                return "background-color:yellow;";
+            } else {
+                return "background-color:red;";
+            }
+        }
+        return "";
+    }
+
+
+
+
+    private static String getToleranceLabel(double differenceValue) {
+        if (!Double.isNaN(differenceValue)) {
+            if (Math.abs(differenceValue) < 0.5) {
+                return "Low";
+            } else if (Math.abs(differenceValue) < 1) {
+                return "Medium";
+            } else {
+                return "High";
+            }
+        }
+        return "";
     }
 
     public static void generateExcelReport(String filePath, List<String[]> reportData, Set<String> primaryKeys) throws IOException {
@@ -120,6 +208,10 @@ public class ReportUtils {
         greenStyle.setFillForegroundColor(IndexedColors.BRIGHT_GREEN.getIndex());
         greenStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
+        CellStyle yellowStyle = workbook.createCellStyle();
+        yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
         CellStyle redStyle = workbook.createCellStyle();
         redStyle.setFillForegroundColor(IndexedColors.RED.getIndex());
         redStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
@@ -128,14 +220,6 @@ public class ReportUtils {
         Font boldFont = workbook.createFont();
         boldFont.setBold(true);
         boldStyle.setFont(boldFont);
-
-        CellStyle yellowStyle = workbook.createCellStyle();
-        yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
-        yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        CellStyle blueStyle = workbook.createCellStyle();
-        blueStyle.setFillForegroundColor(IndexedColors.BLUE.getIndex());
-        blueStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
         int rowNum = 0;
 
@@ -169,21 +253,19 @@ public class ReportUtils {
             Row dataInEnv2ExcelRow = sheet.createRow(rowNum++);
             Row differenceExcelRow = sheet.createRow(rowNum++);
             Row toleranceExcelRow = sheet.createRow(rowNum++);
-            Row primaryKeyExcelRow = sheet.createRow(rowNum++);
 
             int cellNum = 0;
             Cell tradeIdCell = tradeIdExcelRow.createCell(cellNum);
-            tradeIdCell.setCellValue(tradeIdRow[0]);
+            tradeIdCell.setCellValue("Column names");
             tradeIdCell.setCellStyle(boldStyle);
 
             dataInEnv1ExcelRow.createCell(cellNum).setCellValue(dataInEnv1[0]);
             dataInEnv2ExcelRow.createCell(cellNum).setCellValue(dataInEnv2[0]);
             differenceExcelRow.createCell(cellNum).setCellValue(differenceRow[0]);
             toleranceExcelRow.createCell(cellNum).setCellValue("Tolerance");
-            primaryKeyExcelRow.createCell(cellNum).setCellValue("Primary Key");
 
             for (int j = 1; j < differenceRow.length; j++) {
-                if (!"matched".equals(differenceRow[j])) {
+                if (!"matched".equals(differenceRow[j]) && !"".equals(differenceRow[j])) {
                     cellNum++;
                     Cell headerCell = tradeIdExcelRow.createCell(cellNum);
                     headerCell.setCellValue(tradeIdRow[j]);
@@ -193,24 +275,29 @@ public class ReportUtils {
                     dataInEnv2ExcelRow.createCell(cellNum).setCellValue(dataInEnv2[j]);
                     Cell diffCell = differenceExcelRow.createCell(cellNum);
                     diffCell.setCellValue(differenceRow[j]);
-                    diffCell.setCellStyle(yellowStyle);
 
                     double differenceValue = parseDouble(differenceRow[j]);
-                    Cell toleranceCell = toleranceExcelRow.createCell(cellNum);
                     if (!Double.isNaN(differenceValue)) {
-                        if (Math.abs(differenceValue) > 0.5) {
-                            toleranceCell.setCellValue("Yes");
-                            toleranceCell.setCellStyle(redStyle);
+                        if (Math.abs(differenceValue) < 0.5) {
+                            diffCell.setCellStyle(greenStyle);
+                        } else if (Math.abs(differenceValue) < 1) {
+                            diffCell.setCellStyle(yellowStyle);
                         } else {
-                            toleranceCell.setCellValue("No");
-                            toleranceCell.setCellStyle(greenStyle);
+                            diffCell.setCellStyle(redStyle);
                         }
                     }
 
-                    // Check if the column is a primary key
-                    Cell primaryKeyCell = primaryKeyExcelRow.createCell(cellNum);
-                    primaryKeyCell.setCellValue(primaryKeys.contains(tradeIdRow[j]) ? "Yes" : "No");
-                    primaryKeyCell.setCellStyle(blueStyle);
+                    Cell toleranceCell = toleranceExcelRow.createCell(cellNum);
+                    toleranceCell.setCellValue(getToleranceLabel(differenceValue));
+                    if (!Double.isNaN(differenceValue)) {
+                        if (Math.abs(differenceValue) < 0.5) {
+                            toleranceCell.setCellStyle(greenStyle);
+                        } else if (Math.abs(differenceValue) < 1) {
+                            toleranceCell.setCellStyle(yellowStyle);
+                        } else {
+                            toleranceCell.setCellStyle(redStyle);
+                        }
+                    }
                 }
             }
 
@@ -225,6 +312,7 @@ public class ReportUtils {
         System.out.println("Excel report generated successfully at: " + filePath);
         System.out.println("Execution ended for Excel report generation.");
     }
+
 
     private static double parseDouble(String value) {
         try {
