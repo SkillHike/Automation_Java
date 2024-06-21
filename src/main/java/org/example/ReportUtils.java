@@ -3,11 +3,14 @@ package org.example;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class ReportUtils {
@@ -17,7 +20,6 @@ public class ReportUtils {
             System.out.println("No data to generate report. HTML report will not be generated.");
             return;
         }
-
 
         System.out.println("Execution started for HTML report generation.");
 
@@ -44,6 +46,9 @@ public class ReportUtils {
             }
             removeColumn[j] = isEmptyColumn || isMatchedColumn;
         }
+
+        // Get tolerance values for primary key column names from Excel
+        Map<String, String> columnNameToTolerance = getToleranceValuesForPrimaryKeys("C:\\Users\\manju\\IdeaProjects\\filecomparision\\src\\main\\resources\\Reportsheet\\Book1.xlsx", primaryKeys);
 
         // Iterate over the reportData in chunks of 4 (column names, dataInEnv1, dataInEnv2, difference)
         for (int i = 0; i < reportData.size(); i += 4) {
@@ -90,7 +95,6 @@ public class ReportUtils {
             }
             htmlBuilder.append("</tr>");
 
-
             // Data in Env1 row
             htmlBuilder.append("<tr>");
             htmlBuilder.append("<td>").append("Data in Env1").append("</td>");
@@ -128,24 +132,22 @@ public class ReportUtils {
             }
             htmlBuilder.append("</tr>");
 
-            // Insert Tolerance row after Difference row
+            // Tolerance row
             htmlBuilder.append("<tr>");
             htmlBuilder.append("<td>").append("Tolerance").append("</td>");
             for (int j = 0; j < difference.length; j++) {
                 if (!removeColumn[j]) {
-                    String cell = difference[j];
-                    if (!"matched".equals(cell) && !"".equals(cell.trim())) {
-                        double differenceValue = parseDouble(cell);
-                        String cellStyle = getToleranceCellStyle(differenceValue);
-                        htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(getToleranceLabel(differenceValue)).append("</td>");
+                    String columnName = columnNames[j];
+                    String toleranceValue = columnNameToTolerance.get(columnName);
+                    if (toleranceValue != null && !"".equals(toleranceValue.trim())) {
+                        String cellStyle = getToleranceCellStyleFromLabel(toleranceValue);
+                        htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(toleranceValue).append("</td>");
                     } else {
-                        htmlBuilder.append("<td></td>"); // Skip matched or blank cell
+                        htmlBuilder.append("<td></td>"); // Skip blank cell
                     }
                 }
             }
             htmlBuilder.append("</tr>");
-
-            // No Primary Key row included
 
             htmlBuilder.append("<tr><td colspan='").append(columnNames.length + 1).append("'></td></tr>"); // Empty row after each set of rows
         }
@@ -161,6 +163,55 @@ public class ReportUtils {
         System.out.println("HTML report generated successfully at: " + filePath);
         System.out.println("Execution ended for HTML report generation.");
     }
+
+    // Example method for getting tolerance values for primary keys from Excel
+    private static Map<String, String> getToleranceValuesForPrimaryKeys(String excelFilePath, Set<String> primaryKeys) throws IOException {
+        Map<String, String> columnNameToTolerance = new HashMap<>();
+
+        try (FileInputStream file = new FileInputStream(excelFilePath);
+             Workbook workbook = new XSSFWorkbook(file)) {
+
+            Sheet sheet = workbook.getSheetAt(0);  // Assuming data is in the first sheet
+            int toleranceIdx = 5; // Column index for Tolerance
+            int columnNameIdx = 1; // Column index for ColumnName
+
+            // Process the rows starting after the header row
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row != null) {
+                    Cell columnNameCell = row.getCell(columnNameIdx);
+                    Cell toleranceCell = row.getCell(toleranceIdx);
+
+                    if (columnNameCell != null && toleranceCell != null) {
+                        String columnName = columnNameCell.getStringCellValue().trim();
+                        String toleranceValue = toleranceCell.getStringCellValue().trim();
+
+                        if (primaryKeys.contains(columnName)) {
+                            columnNameToTolerance.put(columnName, toleranceValue);
+                        }
+                    }
+                }
+            }
+        }
+
+        return columnNameToTolerance;
+    }
+
+    // Example method for converting tolerance label to cell style
+    private static String getToleranceCellStyleFromLabel(String toleranceLabel) {
+        switch (toleranceLabel.toLowerCase()) {
+            case "high":
+                return "background-color: red;";
+            case "medium":
+                return "background-color: yellow;";
+            case "low":
+                return "background-color: green;";
+            default:
+                return "";
+        }
+    }
+
+
 
 
     private static String getToleranceCellStyle(double differenceValue) {

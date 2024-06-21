@@ -35,6 +35,7 @@ public class DynamicReportGenerator {
 
                 Set<String> primaryKeys = new HashSet<>(reader.getPrimaryKeyColumnNames(folder1 + "\\", excelFileName));
 
+
                 List<List<String>> file1Data = readFile(folder1 + "\\" + excelFileName);
                 List<List<String>> file2Data = readFile(folder2 + "\\" + excelFileName);
 

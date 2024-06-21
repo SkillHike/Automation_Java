@@ -1,6 +1,9 @@
 package org.example;
 
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
@@ -59,55 +62,51 @@ public class ExcelReader {
         return fileSizeInMB > sizeLimitMB;
     }
 
-    private List<String> getExcelPrimaryKeyColumnNames(String fullPath) throws IOException {
+    public List<String> getExcelPrimaryKeyColumnNames(String fullPath) throws IOException {
         List<String> columnNames = new ArrayList<>();
 
-        try (FileInputStream file = new FileInputStream(fullPath);
+
+        try (FileInputStream file = new FileInputStream("C:\\Users\\manju\\IdeaProjects\\filecomparision\\src\\main\\resources\\Reportsheet\\Book1.xlsx");
+
              Workbook workbook = new XSSFWorkbook(file)) {
 
-            Sheet sheet = workbook.getSheetAt(0);
+            Sheet sheet = workbook.getSheetAt(0);  // Assuming data is in the first sheet
+            int comparisionRequiredIdx = 4; // Column index for ComparisionRequired
+            int primaryKeyIdx = 3; // Column index for PrimaryKey
+            int columnNameIdx = 1; // Column index for ColumnName
 
-            int primaryKeyColumnIndex = -1;
-            int columnNameIndex = -1;
-
-            // Get the header row
+            // Identify the column indices based on the header row
             Row headerRow = sheet.getRow(0);
-            Iterator<Cell> cellIterator = headerRow.cellIterator();
 
-            // Find the index of PrimaryKey and ColumnName columns
-            while (cellIterator.hasNext()) {
-                Cell cell = cellIterator.next();
-                String headerValue = cell.getStringCellValue();
-                if ("PrimaryKey".equals(headerValue)) {
-                    primaryKeyColumnIndex = cell.getColumnIndex();
-                } else if ("ColumnName".equals(headerValue)) {
-                    columnNameIndex = cell.getColumnIndex();
-                }
-            }
+            // Process the rows starting after the header row
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row != null) {
+                    Cell comparisionRequiredCell = row.getCell(comparisionRequiredIdx);
+                    Cell primaryKeyCell = row.getCell(primaryKeyIdx);
+                    Cell columnNameCell = row.getCell(columnNameIdx);
 
-            if (primaryKeyColumnIndex == -1 || columnNameIndex == -1) {
-                System.out.println("PrimaryKey or ColumnName column not found.");
-                return columnNames;
-            }
+                    if (comparisionRequiredCell != null && primaryKeyCell != null && columnNameCell != null) {
+                        String comparisionRequired = comparisionRequiredCell.getStringCellValue();
+                        String primaryKey = primaryKeyCell.getStringCellValue();
 
-            // Iterate through rows and filter based on PrimaryKey column
-            for (Row row : sheet) {
-                if (row.getRowNum() == 0) {
-                    continue; // Skip header row
-                }
-
-                Cell primaryKeyCell = row.getCell(primaryKeyColumnIndex);
-                if (primaryKeyCell != null && "yes".equalsIgnoreCase(primaryKeyCell.getStringCellValue())) {
-                    Cell columnNameCell = row.getCell(columnNameIndex);
-                    if (columnNameCell != null) {
-                        columnNames.add(columnNameCell.getStringCellValue());
+                        if ("yes".equalsIgnoreCase(comparisionRequired) && "yes".equalsIgnoreCase(primaryKey)) {
+                            columnNames.add(columnNameCell.getStringCellValue());
+                        }
                     }
                 }
             }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
         return columnNames;
     }
+
+
+
+
+
 
     private List<String> getTextFilePrimaryKeyColumnNames(String fullPath) throws IOException {
         List<String> columnNames = new ArrayList<>();
