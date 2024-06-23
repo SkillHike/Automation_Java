@@ -88,17 +88,34 @@ public class DynamicReportGenerator {
         int totalMatched = 0;
         int totalUnmatched = 0;
 
+        // Iterate through each comparison result set
         for (int i = 0; i < comparisonResult.size(); i += 4) {
-            String[] tradeIdRow = comparisonResult.get(i);
-            String tradeId = tradeIdRow[0];
-            String[] dataInEnv1 = comparisonResult.get(i + 1);
-            String[] dataInEnv2 = comparisonResult.get(i + 2);
-            String[] differences = comparisonResult.get(i + 3);
+            String[] columnNames = comparisonResult.get(i);      // Column names array
+            String tradeId = columnNames[0];                     // Assuming the first element is the trade ID
+
+            String[] dataInEnv1 = comparisonResult.get(i + 1);   // Data in environment 1
+            String[] dataInEnv2 = comparisonResult.get(i + 2);   // Data in environment 2
+            String[] differences = comparisonResult.get(i + 3);  // Differences array
 
             int matchedColumns = 0;
             int unmatchedColumns = 0;
-            for (int j = 1; j < differences.length; j++) {
-                if ("matched".equals(differences[j])) {
+
+            // Iterate through each column (starting from index 1, assuming index 0 is trade ID)
+            String columnName = null;
+            for (int j = 1; j < columnNames.length; j++) {
+                columnName = columnNames[j];
+                String valueInEnv1 = dataInEnv1[j];
+                String valueInEnv2 = dataInEnv2[j];
+                String difference = differences[j];
+
+                // Log details for each column
+                logger.info("Column Name: " + columnName)
+                        .info("Value in Env1: " + valueInEnv1)
+                        .info("Value in Env2: " + valueInEnv2)
+                        .info("Comparison Result: " + difference);
+
+                // Count matched and unmatched columns
+                if ("matched".equals(difference)) {
                     matchedColumns++;
                     totalMatched++;
                 } else {
@@ -107,13 +124,16 @@ public class DynamicReportGenerator {
                 }
             }
 
-            logger.info("Trade ID: " + tradeId)
+            // Log summary
+            logger.info("Column Name: " + columnName)
                     .info("Matched Columns: " + matchedColumns)
-                    .info("Unmatched Columns: " + unmatchedColumns);
+                    .info("Unmatched Columns: " + unmatchedColumns)
+                    .info("--------------------------------------------------");
         }
 
-        logger.info("Total Matched Columns: " + totalMatched)
-                .info("Total Unmatched Columns: " + totalUnmatched);
+        // Log total summary
+        logger.info("Total Matched Columns Across All Trades: " + totalMatched)
+                .info("Total Unmatched Columns Across All Trades: " + totalUnmatched);
 
         // Generate chart
         String chartPath = Paths.get(outputDir, "comparison_chart.png").toString();
@@ -122,10 +142,12 @@ public class DynamicReportGenerator {
         // Embed chart in report
         logger.addScreenCaptureFromPath(chartPath);
 
+        // Flush the extent report
         extent.flush();
 
         return new FileComparisonSummary(fileName, totalMatched, totalUnmatched);
     }
+
 
     private static void generateComparisonChart(int matched, int unmatched, String chartPath) throws IOException {
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();

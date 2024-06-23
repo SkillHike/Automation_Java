@@ -1,5 +1,5 @@
 Serial	ColumnName	DataType	PrimaryKey	ComparisionRequired	Tolerance
-1	Trade ID	INT	Yes	No	Yes
-2	Risk	STRING	Yes	Yes	Yes
-3	Curve	STRING	Yes	Yes	No
-4	Type	STRING	No	Yes	No
+1	Trade ID	INT	Yes	No	Yes High
+2	Risk	STRING	Yes	Yes	Yes Low
+3	Curve	STRING	Yes	Yes	No  low
+4	Type	STRING	No	Yes	No  High

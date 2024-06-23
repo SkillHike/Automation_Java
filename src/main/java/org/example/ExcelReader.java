@@ -108,39 +108,70 @@ public class ExcelReader {
 
 
 
-    private List<String> getTextFilePrimaryKeyColumnNames(String fullPath) throws IOException {
+    public List<String> getTextFilePrimaryKeyColumnNames(String fullPath) throws IOException {
         List<String> columnNames = new ArrayList<>();
 
         try (BufferedReader br = new BufferedReader(new FileReader(fullPath))) {
+            // Read the header line
             String headerLine = br.readLine();
-
             if (headerLine == null) {
                 return columnNames; // No header line, return empty list
             }
 
-            String[] headers = headerLine.split("\\t"); // Assuming tab-separated headers
-            columnNames.addAll(Arrays.asList(headers));
+            // Assuming the column indices are fixed
+            int comparisionRequiredIdx = 4; // Column index for ComparisionRequired
+            int primaryKeyIdx = 3; // Column index for PrimaryKey
+            int columnNameIdx = 1; // Column index for ColumnName
+
+            String line;
+            // Process the rows starting after the header row
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split("\\t"); // Assuming tab-separated values
+                if (values.length > Math.max(comparisionRequiredIdx, Math.max(primaryKeyIdx, columnNameIdx))) {
+                    String comparisionRequired = values[comparisionRequiredIdx];
+                    String primaryKey = values[primaryKeyIdx];
+                    if ("yes".equalsIgnoreCase(comparisionRequired) && "yes".equalsIgnoreCase(primaryKey)) {
+                        columnNames.add(values[columnNameIdx]);
+                    }
+                }
+            }
         }
 
         return columnNames;
     }
 
-    private List<String> getCSVFilePrimaryKeyColumnNames(String fullPath) throws IOException {
+    public List<String> getCSVFilePrimaryKeyColumnNames(String fullPath) throws IOException {
         List<String> columnNames = new ArrayList<>();
 
         try (BufferedReader br = new BufferedReader(new FileReader(fullPath))) {
+            // Read the header line
             String headerLine = br.readLine();
-
             if (headerLine == null) {
                 return columnNames; // No header line, return empty list
             }
 
-            String[] headers = headerLine.split(","); // Assuming comma-separated headers
-            columnNames.addAll(Arrays.asList(headers));
+            // Assuming the column indices are fixed
+            int comparisionRequiredIdx = 4; // Column index for ComparisionRequired
+            int primaryKeyIdx = 3; // Column index for PrimaryKey
+            int columnNameIdx = 1; // Column index for ColumnName
+
+            String line;
+            // Process the rows starting after the header row
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(","); // Assuming comma-separated values
+                if (values.length > Math.max(comparisionRequiredIdx, Math.max(primaryKeyIdx, columnNameIdx))) {
+                    String comparisionRequired = values[comparisionRequiredIdx];
+                    String primaryKey = values[primaryKeyIdx];
+                    if ("yes".equalsIgnoreCase(comparisionRequired) && "yes".equalsIgnoreCase(primaryKey)) {
+                        columnNames.add(values[columnNameIdx]);
+                    }
+                }
+            }
         }
 
         return columnNames;
     }
+
 
     public boolean arePrimaryKeysPresentInBothSheets(String folder1, String folder2, String fileName) {
         String filePath1 = folder1 + "\\" + fileName;

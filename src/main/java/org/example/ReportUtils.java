@@ -65,7 +65,7 @@ public class ReportUtils {
             // Check if there's an actual difference
             boolean hasDifference = false;
             for (int j = 1; j < difference.length; j++) {
-                if (!"matched".equals(difference[j])) {
+                if (!"matched".equals(difference[j]) && !"".equals(difference[j].trim())) {
                     hasDifference = true;
                     break;
                 }
@@ -135,13 +135,15 @@ public class ReportUtils {
             // Tolerance row
             htmlBuilder.append("<tr>");
             htmlBuilder.append("<td>").append("Tolerance").append("</td>");
+            boolean toleranceRowPrinted = false; // Track if the tolerance row is printed
             for (int j = 0; j < difference.length; j++) {
                 if (!removeColumn[j]) {
                     String columnName = columnNames[j];
                     String toleranceValue = columnNameToTolerance.get(columnName);
-                    if (toleranceValue != null && !"".equals(toleranceValue.trim())) {
+                    if (toleranceValue != null && !"".equals(toleranceValue.trim()) && !"".equals(difference[j].trim()) && !"matched".equals(difference[j])) {
                         String cellStyle = getToleranceCellStyleFromLabel(toleranceValue);
                         htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(toleranceValue).append("</td>");
+                        toleranceRowPrinted = true; // Set flag to true when tolerance value is printed
                     } else {
                         htmlBuilder.append("<td></td>"); // Skip blank cell
                     }
@@ -149,7 +151,10 @@ public class ReportUtils {
             }
             htmlBuilder.append("</tr>");
 
-            htmlBuilder.append("<tr><td colspan='").append(columnNames.length + 1).append("'></td></tr>"); // Empty row after each set of rows
+            // Only add an empty row if the tolerance row was printed
+            if (toleranceRowPrinted) {
+                htmlBuilder.append("<tr><td colspan='").append(columnNames.length + 1).append("'></td></tr>"); // Empty row after each set of rows
+            }
         }
 
         htmlBuilder.append("</table></body></html>");
@@ -255,22 +260,13 @@ public class ReportUtils {
         Sheet sheet = workbook.createSheet("Comparison Results");
 
         // Create reusable cell styles
-        CellStyle greenStyle = workbook.createCellStyle();
-        greenStyle.setFillForegroundColor(IndexedColors.BRIGHT_GREEN.getIndex());
-        greenStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        CellStyle greenStyle = createGreenStyle(workbook);
+        CellStyle yellowStyle = createYellowStyle(workbook);
+        CellStyle redStyle = createRedStyle(workbook);
+        CellStyle boldStyle = createBoldStyle(workbook);
 
-        CellStyle yellowStyle = workbook.createCellStyle();
-        yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
-        yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        CellStyle redStyle = workbook.createCellStyle();
-        redStyle.setFillForegroundColor(IndexedColors.RED.getIndex());
-        redStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-        CellStyle boldStyle = workbook.createCellStyle();
-        Font boldFont = workbook.createFont();
-        boldFont.setBold(true);
-        boldStyle.setFont(boldFont);
+        // Get tolerance values for primary key column names from Excel
+        Map<String, String> columnNameToTolerance = getToleranceValuesForPrimaryKeys("C:\\Users\\manju\\IdeaProjects\\filecomparision\\src\\main\\resources\\Reportsheet\\Book1.xlsx", primaryKeys);
 
         int rowNum = 0;
 
@@ -288,7 +284,7 @@ public class ReportUtils {
             // Check if there's an actual difference
             boolean hasDifference = false;
             for (int j = 1; j < differenceRow.length; j++) {
-                if (!"matched".equals(differenceRow[j])) {
+                if (!"matched".equals(differenceRow[j]) && !"".equals(differenceRow[j].trim())) {
                     hasDifference = true;
                     break;
                 }
@@ -306,17 +302,36 @@ public class ReportUtils {
             Row toleranceExcelRow = sheet.createRow(rowNum++);
 
             int cellNum = 0;
-            Cell tradeIdCell = tradeIdExcelRow.createCell(cellNum);
-            tradeIdCell.setCellValue("Column names");
-            tradeIdCell.setCellStyle(boldStyle);
 
-            dataInEnv1ExcelRow.createCell(cellNum).setCellValue(dataInEnv1[0]);
-            dataInEnv2ExcelRow.createCell(cellNum).setCellValue(dataInEnv2[0]);
-            differenceExcelRow.createCell(cellNum).setCellValue(differenceRow[0]);
-            toleranceExcelRow.createCell(cellNum).setCellValue("Tolerance");
+            // Column names row
+            Cell columnNameHeaderCell = tradeIdExcelRow.createCell(cellNum);
+            columnNameHeaderCell.setCellValue("Column names");
+            columnNameHeaderCell.setCellStyle(boldStyle);
+
+            // Data in Env1 row
+            Cell dataInEnv1HeaderCell = dataInEnv1ExcelRow.createCell(cellNum);
+            dataInEnv1HeaderCell.setCellValue("Data in Env1");
+            dataInEnv1HeaderCell.setCellStyle(boldStyle);
+
+            // Data in Env2 row
+            Cell dataInEnv2HeaderCell = dataInEnv2ExcelRow.createCell(cellNum);
+            dataInEnv2HeaderCell.setCellValue("Data in Env2");
+            dataInEnv2HeaderCell.setCellStyle(boldStyle);
+
+            // Difference row
+            Cell differenceHeaderCell = differenceExcelRow.createCell(cellNum);
+            differenceHeaderCell.setCellValue("Difference");
+            differenceHeaderCell.setCellStyle(boldStyle);
+
+            // Tolerance row
+            Cell toleranceHeaderCell = toleranceExcelRow.createCell(cellNum);
+            toleranceHeaderCell.setCellValue("Tolerance");
+            toleranceHeaderCell.setCellStyle(boldStyle);
+
+            boolean toleranceRowPrinted = false; // Track if the tolerance row is printed
 
             for (int j = 1; j < differenceRow.length; j++) {
-                if (!"matched".equals(differenceRow[j]) && !"".equals(differenceRow[j])) {
+                if (!"matched".equals(differenceRow[j]) && !"".equals(differenceRow[j].trim())) {
                     cellNum++;
                     Cell headerCell = tradeIdExcelRow.createCell(cellNum);
                     headerCell.setCellValue(tradeIdRow[j]);
@@ -327,32 +342,45 @@ public class ReportUtils {
                     Cell diffCell = differenceExcelRow.createCell(cellNum);
                     diffCell.setCellValue(differenceRow[j]);
 
-                    double differenceValue = parseDouble(differenceRow[j]);
-                    if (!Double.isNaN(differenceValue)) {
-                        if (Math.abs(differenceValue) < 0.5) {
-                            diffCell.setCellStyle(greenStyle);
-                        } else if (Math.abs(differenceValue) < 1) {
-                            diffCell.setCellStyle(yellowStyle);
-                        } else {
-                            diffCell.setCellStyle(redStyle);
-                        }
-                    }
+                    String columnName = tradeIdRow[j];
+                    String toleranceValue = columnNameToTolerance.get(columnName);
 
-                    Cell toleranceCell = toleranceExcelRow.createCell(cellNum);
-                    toleranceCell.setCellValue(getToleranceLabel(differenceValue));
-                    if (!Double.isNaN(differenceValue)) {
-                        if (Math.abs(differenceValue) < 0.5) {
-                            toleranceCell.setCellStyle(greenStyle);
-                        } else if (Math.abs(differenceValue) < 1) {
-                            toleranceCell.setCellStyle(yellowStyle);
-                        } else {
-                            toleranceCell.setCellStyle(redStyle);
+                    if (toleranceValue != null && !"".equals(toleranceValue.trim())) {
+                        Cell toleranceCell = toleranceExcelRow.createCell(cellNum);
+                        toleranceCell.setCellValue(toleranceValue);
+
+                        switch (toleranceValue.toLowerCase()) {
+                            case "low":
+                                toleranceCell.setCellStyle(greenStyle);
+                                diffCell.setCellStyle(greenStyle);
+                                break;
+                            case "medium":
+                                toleranceCell.setCellStyle(yellowStyle);
+                                diffCell.setCellStyle(yellowStyle);
+                                break;
+                            case "high":
+                                toleranceCell.setCellStyle(redStyle);
+                                diffCell.setCellStyle(redStyle);
+                                break;
+                            default:
+                                // No specific style
+                                break;
                         }
+
+                        toleranceRowPrinted = true; // Set flag to true when tolerance value is printed
                     }
                 }
             }
 
-            sheet.createRow(rowNum++); // Empty row
+            // Only add an empty row if the tolerance row was printed
+            if (toleranceRowPrinted) {
+                sheet.createRow(rowNum++); // Empty row
+            }
+        }
+
+        // Set column widths
+        for (int i = 0; i < 5; i++) {
+            sheet.autoSizeColumn(i);
         }
 
         Files.createDirectories(Paths.get(filePath).getParent());
@@ -363,6 +391,41 @@ public class ReportUtils {
         System.out.println("Excel report generated successfully at: " + filePath);
         System.out.println("Execution ended for Excel report generation.");
     }
+
+    // Helper method to create green fill style
+    private static CellStyle createGreenStyle(Workbook workbook) {
+        CellStyle greenStyle = workbook.createCellStyle();
+        greenStyle.setFillForegroundColor(IndexedColors.BRIGHT_GREEN.getIndex());
+        greenStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return greenStyle;
+    }
+
+    // Helper method to create yellow fill style
+    private static CellStyle createYellowStyle(Workbook workbook) {
+        CellStyle yellowStyle = workbook.createCellStyle();
+        yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return yellowStyle;
+    }
+
+    // Helper method to create red fill style
+    private static CellStyle createRedStyle(Workbook workbook) {
+        CellStyle redStyle = workbook.createCellStyle();
+        redStyle.setFillForegroundColor(IndexedColors.RED.getIndex());
+        redStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return redStyle;
+    }
+
+    // Helper method to create bold font style
+    private static CellStyle createBoldStyle(Workbook workbook) {
+        CellStyle boldStyle = workbook.createCellStyle();
+        Font boldFont = workbook.createFont();
+        boldFont.setBold(true);
+        boldStyle.setFont(boldFont);
+        return boldStyle;
+    }
+
+
 
 
     private static double parseDouble(String value) {
