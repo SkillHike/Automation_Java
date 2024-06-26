@@ -1,6 +1,7 @@
 package org.example;
 
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.FileInputStream;
@@ -140,9 +141,11 @@ public class ReportUtils {
                 if (!removeColumn[j]) {
                     String columnName = columnNames[j];
                     String toleranceValue = columnNameToTolerance.get(columnName);
-                    if (toleranceValue != null && !"".equals(toleranceValue.trim()) && !"".equals(difference[j].trim()) && !"matched".equals(difference[j])) {
-                        String cellStyle = getToleranceCellStyleFromLabel(toleranceValue);
-                        htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(toleranceValue).append("</td>");
+                    if (toleranceValue != null && !"No".equalsIgnoreCase(toleranceValue.trim()) && !"".equals(difference[j].trim()) && !"matched".equals(difference[j])) {
+                        double differenceValue = parseDouble(difference[j]);
+                        String cellStyle = getToleranceCellStyle(differenceValue);
+                        String toleranceLabel = getToleranceLabel(differenceValue);
+                        htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(toleranceLabel).append("</td>");
                         toleranceRowPrinted = true; // Set flag to true when tolerance value is printed
                     } else {
                         htmlBuilder.append("<td></td>"); // Skip blank cell
@@ -169,38 +172,6 @@ public class ReportUtils {
         System.out.println("Execution ended for HTML report generation.");
     }
 
-    // Example method for getting tolerance values for primary keys from Excel
-    private static Map<String, String> getToleranceValuesForPrimaryKeys(String excelFilePath, Set<String> primaryKeys) throws IOException {
-        Map<String, String> columnNameToTolerance = new HashMap<>();
-
-        try (FileInputStream file = new FileInputStream(excelFilePath);
-             Workbook workbook = new XSSFWorkbook(file)) {
-
-            Sheet sheet = workbook.getSheetAt(0);  // Assuming data is in the first sheet
-            int toleranceIdx = 5; // Column index for Tolerance
-            int columnNameIdx = 1; // Column index for ColumnName
-
-            // Process the rows starting after the header row
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row != null) {
-                    Cell columnNameCell = row.getCell(columnNameIdx);
-                    Cell toleranceCell = row.getCell(toleranceIdx);
-
-                    if (columnNameCell != null && toleranceCell != null) {
-                        String columnName = columnNameCell.getStringCellValue().trim();
-                        String toleranceValue = toleranceCell.getStringCellValue().trim();
-
-                        if (primaryKeys.contains(columnName)) {
-                            columnNameToTolerance.put(columnName, toleranceValue);
-                        }
-                    }
-                }
-            }
-        }
-
-        return columnNameToTolerance;
-    }
 
     // Example method for converting tolerance label to cell style
     private static String getToleranceCellStyleFromLabel(String toleranceLabel) {
@@ -216,38 +187,29 @@ public class ReportUtils {
         }
     }
 
-
-
-
     private static String getToleranceCellStyle(double differenceValue) {
         if (!Double.isNaN(differenceValue)) {
             if (Math.abs(differenceValue) < 0.5) {
-                return "background-color:green;";
-            } else if (Math.abs(differenceValue) < 1) {
-                return "background-color:yellow;";
+                return "background-color: green;";
+            } else if (Math.abs(differenceValue) < 1.0) {
+                return "background-color: yellow;";
             } else {
-                return "background-color:red;";
+                return "background-color: red;";
             }
         }
         return "";
     }
 
-
-
-
+    // Example method for converting difference value to tolerance label
     private static String getToleranceLabel(double differenceValue) {
-        if (!Double.isNaN(differenceValue)) {
-            if (Math.abs(differenceValue) < 0.5) {
-                return "Low";
-            } else if (Math.abs(differenceValue) < 1) {
-                return "Medium";
-            } else {
-                return "High";
-            }
+        if (differenceValue < 0.5) {
+            return "Low";
+        } else if (differenceValue < 1.0) {
+            return "Medium";
+        } else {
+            return "High";
         }
-        return "";
     }
-
     public static void generateExcelReport(String filePath, List<String[]> reportData, Set<String> primaryKeys) throws IOException {
         if (reportData.isEmpty()) {
             System.out.println("No data to generate report. Excel report will not be generated.");
@@ -265,7 +227,7 @@ public class ReportUtils {
         CellStyle redStyle = createRedStyle(workbook);
         CellStyle boldStyle = createBoldStyle(workbook);
 
-        // Get tolerance values for primary key column names from Excel
+        // Get tolerance values for columns where tolerance is not "No"
         Map<String, String> columnNameToTolerance = getToleranceValuesForPrimaryKeys("C:\\Users\\manju\\IdeaProjects\\filecomparision\\src\\main\\resources\\Reportsheet\\Book1.xlsx", primaryKeys);
 
         int rowNum = 0;
@@ -342,33 +304,29 @@ public class ReportUtils {
                     Cell diffCell = differenceExcelRow.createCell(cellNum);
                     diffCell.setCellValue(differenceRow[j]);
 
-                    String columnName = tradeIdRow[j];
-                    String toleranceValue = columnNameToTolerance.get(columnName);
+                    double differenceValue = parseDouble(differenceRow[j]);
+                    String toleranceLabel = columnNameToTolerance.getOrDefault(tradeIdRow[j], "");
+                    Cell toleranceCell = toleranceExcelRow.createCell(cellNum);
 
-                    if (toleranceValue != null && !"".equals(toleranceValue.trim())) {
-                        Cell toleranceCell = toleranceExcelRow.createCell(cellNum);
-                        toleranceCell.setCellValue(toleranceValue);
-
-                        switch (toleranceValue.toLowerCase()) {
-                            case "low":
-                                toleranceCell.setCellStyle(greenStyle);
-                                diffCell.setCellStyle(greenStyle);
-                                break;
-                            case "medium":
-                                toleranceCell.setCellStyle(yellowStyle);
-                                diffCell.setCellStyle(yellowStyle);
-                                break;
-                            case "high":
-                                toleranceCell.setCellStyle(redStyle);
-                                diffCell.setCellStyle(redStyle);
-                                break;
-                            default:
-                                // No specific style
-                                break;
+                    if (!"No".equalsIgnoreCase(toleranceLabel)) {
+                        if (differenceValue <= 0.5) {
+                            toleranceLabel = "low";
+                            toleranceCell.setCellStyle(greenStyle);
+                            diffCell.setCellStyle(greenStyle);
+                        } else if (differenceValue > 0.5 && differenceValue <= 1) {
+                            toleranceLabel = "medium";
+                            toleranceCell.setCellStyle(yellowStyle);
+                            diffCell.setCellStyle(yellowStyle);
+                        } else if (differenceValue > 1) {
+                            toleranceLabel = "high";
+                            toleranceCell.setCellStyle(redStyle);
+                            diffCell.setCellStyle(redStyle);
                         }
-
-                        toleranceRowPrinted = true; // Set flag to true when tolerance value is printed
                     }
+
+                    toleranceCell.setCellValue(toleranceLabel);
+
+                    toleranceRowPrinted = true; // Set flag to true when tolerance value is printed
                 }
             }
 
@@ -425,14 +383,51 @@ public class ReportUtils {
         return boldStyle;
     }
 
+    // Example method for getting tolerance values for columns where tolerance is not "No"
+    private static Map<String, String> getToleranceValuesForPrimaryKeys(String excelFilePath, Set<String> primaryKeys) throws IOException {
+        Map<String, String> columnNameToTolerance = new HashMap<>();
+
+        try (FileInputStream file = new FileInputStream(excelFilePath);
+             Workbook workbook = new XSSFWorkbook(file)) {
+
+            Sheet sheet = workbook.getSheetAt(0);  // Assuming data is in the first sheet
+            int toleranceIdx = 5; // Column index for Tolerance
+            int columnNameIdx = 1; // Column index for ColumnName
+
+            // Process the rows starting after the header row
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row != null) {
+                    Cell columnNameCell = row.getCell(columnNameIdx);
+                    Cell toleranceCell = row.getCell(toleranceIdx);
+
+                    if (columnNameCell != null && toleranceCell != null) {
+                        String columnName = columnNameCell.getStringCellValue().trim();
+                        if (primaryKeys.contains(columnName)) {
+                            String toleranceValue = "";
+                            if (toleranceCell.getCellType() == CellType.STRING) {
+                                toleranceValue = toleranceCell.getStringCellValue().trim();
+                            }
+                            columnNameToTolerance.put(columnName, toleranceValue);
+                        }
+                    }
+                }
+            }
+        }
+
+        return columnNameToTolerance;
+    }
+
 
 
 
     private static double parseDouble(String value) {
         try {
-            return Double.parseDouble(value);
+            return Double.parseDouble(value.trim());
         } catch (NumberFormatException e) {
             return Double.NaN;
         }
-    }
-}
+    }}
+
+
+
