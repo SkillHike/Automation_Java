@@ -90,7 +90,7 @@ public class ExcelReader {
                         String comparisionRequired = comparisionRequiredCell.getStringCellValue();
                         String primaryKey = primaryKeyCell.getStringCellValue();
 
-                        if ("yes".equalsIgnoreCase(comparisionRequired) && "yes".equalsIgnoreCase(primaryKey)) {
+                        if ("yes".equalsIgnoreCase(primaryKey)) {
                             columnNames.add(columnNameCell.getStringCellValue());
                         }
                     }
@@ -130,7 +130,7 @@ public class ExcelReader {
                 if (values.length > Math.max(comparisionRequiredIdx, Math.max(primaryKeyIdx, columnNameIdx))) {
                     String comparisionRequired = values[comparisionRequiredIdx];
                     String primaryKey = values[primaryKeyIdx];
-                    if ("yes".equalsIgnoreCase(comparisionRequired) && "yes".equalsIgnoreCase(primaryKey)) {
+                    if ( "yes".equalsIgnoreCase(primaryKey)) {
                         columnNames.add(values[columnNameIdx]);
                     }
                 }

@@ -2,6 +2,7 @@ package org.example;
 
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.ExtentTest;
+import com.aventstack.extentreports.Status;
 import com.aventstack.extentreports.reporter.ExtentSparkReporter;
 import com.opencsv.exceptions.CsvValidationException;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
@@ -23,6 +24,8 @@ import java.util.*;
 
 public class DynamicReportGenerator {
 
+
+
     public static void generateReports(String folder1, String folder2, String baseOutputPath, String excelFileName) {
         List<FileComparisonSummary> summaryList = new ArrayList<>();
         ExcelReader reader = new ExcelReader();
@@ -32,19 +35,27 @@ public class DynamicReportGenerator {
             boolean primaryKeysMatch = reader.arePrimaryKeysPresentInBothSheets(folder1, folder2, excelFileName);
 
             if (primaryKeysMatch) {
-
                 Set<String> primaryKeys = new HashSet<>(reader.getPrimaryKeyColumnNames(folder1 + "\\", excelFileName));
-
 
                 List<List<String>> file1Data = readFile(folder1 + "\\" + excelFileName);
                 List<List<String>> file2Data = readFile(folder2 + "\\" + excelFileName);
 
-                System.out.println("Comparison started for " + excelFileName);
-                System.out.println(file1Data + "============" + file2Data);
+                // Create maps to store rows by primary key value
+                Map<String, List<String>> file1DataMap = mapDataByPrimaryKey(file1Data, primaryKeys);
+                Map<String, List<String>> file2DataMap = mapDataByPrimaryKey(file2Data, primaryKeys);
 
-                List<String[]> comparisonResult = FileComparisonUtils.compareFiles(file1Data, file2Data);
+                // Find matching primary key values in both files
+                Set<String> matchingPrimaryKeys = new HashSet<>(file1DataMap.keySet());
+                matchingPrimaryKeys.retainAll(file2DataMap.keySet());
 
-                System.out.println("Comparison completed for " + excelFileName);
+                List<String[]> comparisonResult = new ArrayList<>();
+
+                for (String primaryKey : matchingPrimaryKeys) {
+                    List<String> row1 = file1DataMap.get(primaryKey);
+                    List<String> row2 = file2DataMap.get(primaryKey);
+
+                    comparisonResult.addAll(FileComparisonUtils.compareRows(row1, row2));
+                }
 
                 String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
                 String outputDir = Paths.get(baseOutputPath, excelFileName + "_" + timestamp).toString();
@@ -53,10 +64,8 @@ public class DynamicReportGenerator {
                 String htmlReportPath = Paths.get(outputDir, "report.html").toString();
                 String excelReportPath = Paths.get(outputDir, "report.xlsx").toString();
 
-
-
-                ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult,primaryKeys);
-                ReportUtils.generateExcelReport(excelReportPath, comparisonResult,primaryKeys);
+                ReportUtils.generateHTMLReport(htmlReportPath, comparisonResult, primaryKeys);
+                ReportUtils.generateExcelReport(excelReportPath, comparisonResult, primaryKeys);
 
                 // Generate individual Extent Report for each file comparison
                 String extentReportPath = Paths.get(outputDir, "ExtentReport.html").toString();
@@ -75,6 +84,47 @@ public class DynamicReportGenerator {
         }
     }
 
+    private static Map<String, List<String>> mapDataByPrimaryKey(List<List<String>> data, Set<String> primaryKeys) {
+        Map<String, List<String>> dataMap = new HashMap<>();
+
+        // Assuming the first row contains the headers
+        List<String> headers = data.get(0);
+        Map<String, Integer> headerIndexMap = new HashMap<>();
+        for (int i = 0; i < headers.size(); i++) {
+            headerIndexMap.put(headers.get(i), i);
+        }
+
+        for (List<String> row : data) {
+            String primaryKey = generatePrimaryKey(row, primaryKeys, headerIndexMap);
+            dataMap.put(primaryKey, row);
+        }
+
+        return dataMap;
+    }
+
+    private static String generatePrimaryKey(List<String> row, Set<String> primaryKeys, Map<String, Integer> headerIndexMap) {
+        StringBuilder primaryKey = new StringBuilder();
+
+        for (String key : primaryKeys) {
+            int index = headerIndexMap.getOrDefault(key, -1);
+            if (index >= 0 && index < row.size()) {
+                primaryKey.append(row.get(index)).append("-");
+            } else {
+                primaryKey.append("-"); // Add a placeholder for missing values
+            }
+        }
+
+        // Remove the trailing hyphen
+        if (primaryKey.length() > 0) {
+            primaryKey.setLength(primaryKey.length() - 1);
+        }
+
+        return primaryKey.toString();
+    }
+
+
+
+
     private static FileComparisonSummary generateExtentReport(String fileName, List<String[]> comparisonResult, String reportPath, String outputDir) throws IOException {
         ExtentSparkReporter sparkReporter = new ExtentSparkReporter(reportPath);
         sparkReporter.config().setDocumentTitle("File Comparison Report - " + fileName);
@@ -90,45 +140,51 @@ public class DynamicReportGenerator {
 
         // Iterate through each comparison result set
         for (int i = 0; i < comparisonResult.size(); i += 4) {
-            String[] columnNames = comparisonResult.get(i);      // Column names array
-            String tradeId = columnNames[0];                     // Assuming the first element is the trade ID
+            if (i + 3 < comparisonResult.size()) { // Check if there are enough elements left in comparisonResult
+                String[] columnNames = comparisonResult.get(i);      // Column names array
+                String tradeId = columnNames.length > 0 ? columnNames[0] : "";  // Assuming the first element is the trade ID
 
-            String[] dataInEnv1 = comparisonResult.get(i + 1);   // Data in environment 1
-            String[] dataInEnv2 = comparisonResult.get(i + 2);   // Data in environment 2
-            String[] differences = comparisonResult.get(i + 3);  // Differences array
+                String[] dataInEnv1 = comparisonResult.get(i + 1);   // Data in environment 1
+                String[] dataInEnv2 = comparisonResult.get(i + 2);   // Data in environment 2
+                String[] differences = comparisonResult.get(i + 3);  // Differences array
 
-            int matchedColumns = 0;
-            int unmatchedColumns = 0;
+                int matchedColumns = 0;
+                int unmatchedColumns = 0;
 
-            // Iterate through each column (starting from index 1, assuming index 0 is trade ID)
-            String columnName = null;
-            for (int j = 1; j < columnNames.length; j++) {
-                columnName = columnNames[j];
-                String valueInEnv1 = dataInEnv1[j];
-                String valueInEnv2 = dataInEnv2[j];
-                String difference = differences[j];
+                // Iterate through each column (starting from index 1, assuming index 0 is trade ID)
+                for (int j = 1; j < columnNames.length; j++) {
+                    if (j < dataInEnv1.length && j < dataInEnv2.length && j < differences.length) {
+                        String columnName = columnNames[j];
+                        String valueInEnv1 = dataInEnv1[j];
+                        String valueInEnv2 = dataInEnv2[j];
+                        String difference = differences[j];
 
-                // Log details for each column
-                logger.info("Column Name: " + columnName)
-                        .info("Value in Env1: " + valueInEnv1)
-                        .info("Value in Env2: " + valueInEnv2)
-                        .info("Comparison Result: " + difference);
+                        // Log details for each column
+                        logger.info("Column Name: " + columnName)
+                                .info("Value in Env1: " + valueInEnv1)
+                                .info("Value in Env2: " + valueInEnv2)
+                                .info("Comparison Result: " + difference);
 
-                // Count matched and unmatched columns
-                if ("matched".equals(difference)) {
-                    matchedColumns++;
-                    totalMatched++;
-                } else {
-                    unmatchedColumns++;
-                    totalUnmatched++;
+                        // Count matched and unmatched columns
+                        if ("matched".equals(difference)) {
+                            matchedColumns++;
+                            totalMatched++;
+                        } else {
+                            unmatchedColumns++;
+                            totalUnmatched++;
+                        }
+                    } else {
+                        logger.log(Status.WARNING, "Skipping column due to index out of bounds: " + j);
+                    }
                 }
-            }
 
-            // Log summary
-            logger.info("Column Name: " + columnName)
-                    .info("Matched Columns: " + matchedColumns)
-                    .info("Unmatched Columns: " + unmatchedColumns)
-                    .info("--------------------------------------------------");
+                // Log summary
+                logger.info("Matched Columns: " + matchedColumns)
+                        .info("Unmatched Columns: " + unmatchedColumns)
+                        .info("--------------------------------------------------");
+            } else {
+                logger.log(Status.WARNING, "Incomplete comparison data at index " + i + " in comparisonResult.");
+            }
         }
 
         // Log total summary
@@ -147,6 +203,8 @@ public class DynamicReportGenerator {
 
         return new FileComparisonSummary(fileName, totalMatched, totalUnmatched);
     }
+
+
 
 
     private static void generateComparisonChart(int matched, int unmatched, String chartPath) throws IOException {

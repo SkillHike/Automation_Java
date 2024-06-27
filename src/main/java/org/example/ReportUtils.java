@@ -1,7 +1,6 @@
 package org.example;
 
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.FileInputStream;
@@ -9,10 +8,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class ReportUtils {
 
@@ -124,7 +120,8 @@ public class ReportUtils {
                     String cell = difference[j];
                     if (!"matched".equals(cell) && !"".equals(cell.trim())) {
                         double differenceValue = parseDouble(cell);
-                        String cellStyle = getToleranceCellStyle(differenceValue);
+                        differenceValue = Math.abs(differenceValue); // Convert negative difference to positive
+                        String cellStyle = getDifferenceCellStyle(differenceValue);
                         htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(cell).append("</td>");
                     } else {
                         htmlBuilder.append("<td></td>"); // Skip matched or blank cell
@@ -143,9 +140,17 @@ public class ReportUtils {
                     String toleranceValue = columnNameToTolerance.get(columnName);
                     if (toleranceValue != null && !"No".equalsIgnoreCase(toleranceValue.trim()) && !"".equals(difference[j].trim()) && !"matched".equals(difference[j])) {
                         double differenceValue = parseDouble(difference[j]);
-                        String cellStyle = getToleranceCellStyle(differenceValue);
+                        differenceValue = Math.abs(differenceValue); // Convert negative difference to positive
+
                         String toleranceLabel = getToleranceLabel(differenceValue);
-                        htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(toleranceLabel).append("</td>");
+                        String cellStyle = getToleranceCellStyle(toleranceValue,toleranceLabel);
+                        String toleranceresult= "Na";
+                        if(toleranceValue.equalsIgnoreCase(toleranceLabel)){
+                            toleranceresult= "Matched with tolerance";
+                        }else{
+                           toleranceresult= "Not-Matched with tolerance";
+                        }
+                        htmlBuilder.append("<td style='").append(cellStyle).append("'>").append(toleranceresult).append("</td>");
                         toleranceRowPrinted = true; // Set flag to true when tolerance value is printed
                     } else {
                         htmlBuilder.append("<td></td>"); // Skip blank cell
@@ -173,43 +178,6 @@ public class ReportUtils {
     }
 
 
-    // Example method for converting tolerance label to cell style
-    private static String getToleranceCellStyleFromLabel(String toleranceLabel) {
-        switch (toleranceLabel.toLowerCase()) {
-            case "high":
-                return "background-color: red;";
-            case "medium":
-                return "background-color: yellow;";
-            case "low":
-                return "background-color: green;";
-            default:
-                return "";
-        }
-    }
-
-    private static String getToleranceCellStyle(double differenceValue) {
-        if (!Double.isNaN(differenceValue)) {
-            if (Math.abs(differenceValue) < 0.5) {
-                return "background-color: green;";
-            } else if (Math.abs(differenceValue) < 1.0) {
-                return "background-color: yellow;";
-            } else {
-                return "background-color: red;";
-            }
-        }
-        return "";
-    }
-
-    // Example method for converting difference value to tolerance label
-    private static String getToleranceLabel(double differenceValue) {
-        if (differenceValue < 0.5) {
-            return "Low";
-        } else if (differenceValue < 1.0) {
-            return "Medium";
-        } else {
-            return "High";
-        }
-    }
     public static void generateExcelReport(String filePath, List<String[]> reportData, Set<String> primaryKeys) throws IOException {
         if (reportData.isEmpty()) {
             System.out.println("No data to generate report. Excel report will not be generated.");
@@ -305,26 +273,36 @@ public class ReportUtils {
                     diffCell.setCellValue(differenceRow[j]);
 
                     double differenceValue = parseDouble(differenceRow[j]);
+                    differenceValue = Math.abs(differenceValue); // Convert negative difference to positive
+
                     String toleranceLabel = columnNameToTolerance.getOrDefault(tradeIdRow[j], "");
                     Cell toleranceCell = toleranceExcelRow.createCell(cellNum);
+                    String toleranceresult="";
 
                     if (!"No".equalsIgnoreCase(toleranceLabel)) {
-                        if (differenceValue <= 0.5) {
-                            toleranceLabel = "low";
+                        if("low".equalsIgnoreCase(toleranceLabel)){
+                        if (differenceValue < 0.5) {
+                            toleranceresult = "Matched with tolerance";
                             toleranceCell.setCellStyle(greenStyle);
-                            diffCell.setCellStyle(greenStyle);
-                        } else if (differenceValue > 0.5 && differenceValue <= 1) {
-                            toleranceLabel = "medium";
-                            toleranceCell.setCellStyle(yellowStyle);
-                            diffCell.setCellStyle(yellowStyle);
-                        } else if (differenceValue > 1) {
-                            toleranceLabel = "high";
+                            }
+                        } else if("Medium".equalsIgnoreCase(toleranceLabel)){
+                        if(differenceValue > 0.5 && differenceValue <= 1) {
+                            toleranceresult = "Matched with tolerance";
+                            toleranceCell.setCellStyle(greenStyle);
+                            }
+                        } else if ("High".equalsIgnoreCase(toleranceLabel)){
+                        if (differenceValue > 1) {
+                            toleranceresult = "Matched with tolerance";
+                            toleranceCell.setCellStyle(greenStyle);
                             toleranceCell.setCellStyle(redStyle);
-                            diffCell.setCellStyle(redStyle);
+                            }
+                        }else {
+                            toleranceresult = "Not-matched with tolerance";
+                            toleranceCell.setCellStyle(redStyle);
+
                         }
                     }
-
-                    toleranceCell.setCellValue(toleranceLabel);
+                    toleranceCell.setCellValue(toleranceresult);
 
                     toleranceRowPrinted = true; // Set flag to true when tolerance value is printed
                 }
@@ -403,7 +381,7 @@ public class ReportUtils {
 
                     if (columnNameCell != null && toleranceCell != null) {
                         String columnName = columnNameCell.getStringCellValue().trim();
-                        if (primaryKeys.contains(columnName)) {
+//                        if (primaryKeys.contains(columnName)) {
                             String toleranceValue = "";
                             if (toleranceCell.getCellType() == CellType.STRING) {
                                 toleranceValue = toleranceCell.getStringCellValue().trim();
@@ -413,21 +391,48 @@ public class ReportUtils {
                     }
                 }
             }
-        }
+//        }
 
         return columnNameToTolerance;
     }
 
+    // Example method for converting difference value to tolerance label
+    private static String getToleranceLabel(double differenceValue) {
+        if (differenceValue < 0.5) {
+            return "low";
+        } else if (differenceValue < 1.0) {
+            return "medium";
+        } else {
+            return "high";
+        }
+    }
+    private static String getToleranceCellStyle(String tolerancevalue,String tolerancelabel) {
+//        differenceValue = Math.abs(differenceValue); // Convert to absolute value
+        if(tolerancelabel.equalsIgnoreCase(tolerancevalue))
+        {return "background-color: green;";}
+        else{ return "background-color: red;";}
+
+    }
+
+    private static String getDifferenceCellStyle(double differenceValue) {
+        if (differenceValue < 0.5) {
+            return "background-color: green;";
+        } else if (differenceValue < 1.0) { // Adjusted threshold for medium
+            return "background-color: yellow;";
+        } else {return "background-color: red;";
+
+        }
+    }
 
 
 
+    // Example method for parsing double from string
     private static double parseDouble(String value) {
         try {
             return Double.parseDouble(value.trim());
         } catch (NumberFormatException e) {
             return Double.NaN;
         }
-    }}
-
-
+    }
+}
 

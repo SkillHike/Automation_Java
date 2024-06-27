@@ -10,8 +10,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class FileComparisonUtils {
 
@@ -59,7 +58,6 @@ public class FileComparisonUtils {
         return records;
     }
 
-
     public static List<String[]> compareFiles(List<List<String>> file1Data, List<List<String>> file2Data) {
         List<String[]> results = new ArrayList<>();
 
@@ -77,25 +75,18 @@ public class FileComparisonUtils {
             String tradeId = i < file1Data.size() ? file1Data.get(i).get(0) : file2Data.get(i).get(0);
 
             // Create trade data row and add to results
-            results.add(createTradeData(headers, tradeId, row1, row2, numCols));
+            results.add(createTradeData(headers, tradeId, numCols));
 
-            // Add data in environment 1 (row1) to results
-            results.add(createRowData("Data in Env1", row1, row2, numCols));
-
-            // Add data in environment 2 (row2) to results
-            results.add(createRowData("Data in Env2", row2, row1, numCols));
-
-            // Add difference row between row1 and row2 to results
-            results.add(createDifferenceRow(row1, row2, numCols));
+            // Compare rows and add the results to the final comparison results
+            results.addAll(compareRows(row1, row2));
         }
 
         return results;
     }
 
-    // Method to create trade data row based on column headers, trade ID, and row data from both environments
-    private static String[] createTradeData(List<String> headers, String tradeId, List<String> row1, List<String> row2, int numCols) {
+    // Method to create trade data row based on column headers and trade ID
+    private static String[] createTradeData(List<String> headers, String tradeId, int numCols) {
         String[] tradeDataRow = new String[numCols];
-
 
         // Set column names as the rest of the elements in the row
         for (int j = 0; j < numCols; j++) {
@@ -105,17 +96,12 @@ public class FileComparisonUtils {
         return tradeDataRow;
     }
 
-    private static String[] createRowData(String label, List<String> rowData, List<String> comparisonData, int numCols) {
+    private static String[] createRowData(String label, List<String> rowData, int numCols) {
         String[] row = new String[numCols];
         row[0] = label;
         for (int j = 0; j < numCols; j++) {
             String cellValue = rowData.size() > j ? rowData.get(j) : "";
-            String compareValue = comparisonData.size() > j ? comparisonData.get(j) : "";
-            if (cellValue.equals(compareValue)) {
-                row[j] = cellValue;
-            } else {
-                row[j] = cellValue;
-            }
+            row[j] = cellValue;
         }
         return row;
     }
@@ -146,7 +132,21 @@ public class FileComparisonUtils {
         return row;
     }
 
+    public static List<String[]> compareRows(List<String> row1, List<String> row2) {
+        int numCols = Math.max(row1.size(), row2.size());
+        List<String[]> results = new ArrayList<>();
 
+        // Add data in environment 1 (row1) to results
+        results.add(createRowData("Data in Env1", row1, numCols));
+
+        // Add data in environment 2 (row2) to results
+        results.add(createRowData("Data in Env2", row2, numCols));
+
+        // Add difference row between row1 and row2 to results
+        results.add(createDifferenceRow(row1, row2, numCols));
+
+        return results;
+    }
 
     private static double parseDouble(String str) {
         try {
@@ -163,5 +163,31 @@ public class FileComparisonUtils {
         } catch (NumberFormatException e) {
             return false;
         }
+    }
+
+    // Method to map data rows by primary key
+    public static Map<String, List<String>> mapDataByPrimaryKey(List<List<String>> data, Set<String> primaryKeys) {
+        Map<String, List<String>> dataMap = new HashMap<>();
+
+        for (List<String> row : data) {
+            String primaryKey = generatePrimaryKey(row, primaryKeys);
+            dataMap.put(primaryKey, row);
+        }
+
+        return dataMap;
+    }
+
+    // Method to generate primary key from specified columns
+    private static String generatePrimaryKey(List<String> row, Set<String> primaryKeys) {
+        List<String> primaryKeyValues = new ArrayList<>();
+        for (String key : primaryKeys) {
+            int index = Integer.parseInt(key); // Assuming primaryKeys contains column indices as strings
+            if (index < row.size()) {
+                primaryKeyValues.add(row.get(index));
+            } else {
+                primaryKeyValues.add(""); // Add empty value if index is out of bounds
+            }
+        }
+        return String.join("-", primaryKeyValues);
     }
 }
