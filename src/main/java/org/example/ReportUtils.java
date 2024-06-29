@@ -55,9 +55,9 @@ public class ReportUtils {
             }
 
             String[] columnNames = reportData.get(i);
-            String[] dataInEnv1 = reportData.get(i + 1);
-            String[] dataInEnv2 = reportData.get(i + 2);
-            String[] difference = reportData.get(i + 3);
+            String[] dataInEnv1 = reportData.get(i + 3);
+            String[] dataInEnv2 = reportData.get(i + 4);
+            String[] difference = reportData.get(i + 5);
 
             // Check if there's an actual difference
             boolean hasDifference = false;
@@ -207,9 +207,9 @@ public class ReportUtils {
             }
 
             String[] tradeIdRow = reportData.get(i);
-            String[] dataInEnv1 = reportData.get(i + 1);
-            String[] dataInEnv2 = reportData.get(i + 2);
-            String[] differenceRow = reportData.get(i + 3);
+            String[] dataInEnv1 = reportData.get(i + 3);
+            String[] dataInEnv2 = reportData.get(i + 4);
+            String[] differenceRow = reportData.get(i + 5);
 
             // Check if there's an actual difference
             boolean hasDifference = false;
@@ -294,7 +294,7 @@ public class ReportUtils {
                         if (differenceValue > 1) {
                             toleranceresult = "Matched with tolerance";
                             toleranceCell.setCellStyle(greenStyle);
-                            toleranceCell.setCellStyle(redStyle);
+
                             }
                         }else {
                             toleranceresult = "Not-matched with tolerance";
